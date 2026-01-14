@@ -1,18 +1,11 @@
-# AgentBeats Scenario Configuration
-# =================================
-
 [green_agent]
-# El ID de tu Estadio (Green Agent)
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-# La llave segura (la cogerá de tus secretos)
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
-# El ID de tu Jugador (Purple Agent - Flash)
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [config]
-# Configuración básica para arrancar
 num_games = 1
