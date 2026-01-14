@@ -4,14 +4,16 @@
 [green_agent]
 # El Estadio (CapsBench Leaderboard)
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
+# Aquí está la clave: Usamos el nombre que tu código espera
+env = { GOOGLE_API_KEY = "AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
 
 [[participants]]
 # El Jugador (Purple Agent)
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
+# El jugador también necesita ojos para ver
+env = { GOOGLE_API_KEY = "AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
 
 [config]
-# Configuración de la partida
+# Parámetros opcionales para tu entorno
 num_games = 1
