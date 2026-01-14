@@ -1,0 +1,48 @@
+name: Run CapsBench Evaluation
+
+on:
+  push:
+    paths:
+      - 'scenario.toml' # Se activa al modificar este archivo
+  workflow_dispatch: # Permite lanzarlo manualmente
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install tomli-w requests
+
+      - name: Download Orchestrator Script
+        # Descargamos el script oficial que menciona el tutorial
+        run: curl -O https://raw.githubusercontent.com/agentbeats/leaderboard-template/main/generate_compose.py
+
+      - name: Run Evaluation Game
+        env:
+          # Aquí es donde GitHub inyecta tu llave secreta
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          # 1. Generar la configuración de Docker
+          python generate_compose.py --scenario scenario.toml
+          
+          # 2. Arrancar el partido (Docker)
+          docker compose up --abort-on-container-exit
+
+      - name: Upload Results (Artifact)
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: results
+          path: output/
