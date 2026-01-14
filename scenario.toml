@@ -4,13 +4,13 @@
 [green_agent]
 # El Estadio (CapsBench Leaderboard)
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-env = { GEMINI_API_KEY = "${GEMINI_API_KEY}" }
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
 # El Jugador (Purple Agent)
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
-env = { GEMINI_API_KEY = "${GEMINI_API_KEY}" }
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [config]
 # Configuración de la partida
