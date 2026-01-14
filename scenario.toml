@@ -1,19 +1,18 @@
-# CapsBench Official Configuration
-# ==========================================
+# AgentBeats Scenario Configuration for CapsBench
+# ======================================================
 
 [green_agent]
-# El Estadio (CapsBench Leaderboard)
+# CapsBench Orchestrator (Leaderboard Agent)
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-# Aquí está la clave: Usamos el nombre que tu código espera
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
+# Pasamos la llave directamente para asegurar que llegue
+env = { "GOOGLE_API_KEY=AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
 
 [[participants]]
-# El Jugador (Purple Agent)
+# Purple Agent (The Player)
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
-# El jugador también necesita ojos para ver
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
+env = { "GOOGLE_API_KEY=AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM"  }
 
 [config]
-# Parámetros opcionales para tu entorno
+# Configuration passed to the Green Agent
 num_games = 1
