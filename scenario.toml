@@ -1,11 +1,11 @@
 [green_agent]
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-env = { GOOGLE_API_KEY = "GOOGLE_API_KEY=AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
+env = { GOOGLE_API_KEY = "GOOGLE_API_KEY=AIzaSyA3OW" }
 
 [[participants]]
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
-env = { GOOGLE_API_KEY = "GOOGLE_API_KEY=AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
+env = { GOOGLE_API_KEY = "GOOGLE_API_KEY=AIzaSy" }
 
 [config]
 num_games = 1
