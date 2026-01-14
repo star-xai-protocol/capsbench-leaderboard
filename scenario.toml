@@ -1,4 +1,11 @@
-# AgentBeats Scenario Configuration for CapsBench
-# ======================================================
+[green_agent]
+agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+env = { GOOGLE_API_KEY = "GOOGLE_API_KEY=AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
 
+[[participants]]
+name = "Purple-Gemini-Flash"
+agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
+env = { GOOGLE_API_KEY = "GOOGLE_API_KEY=AIzaSyA3OWHYsC8NohPeO9oEMDGMP52dmkqhrQM" }
 
+[config]
+num_games = 1
