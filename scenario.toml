@@ -1,12 +1,17 @@
-[scenario]
-name = "CapsBench Official Benchmark"
-description = "Official evaluation of the STAR-XAI Protocol within the Caps i Caps environment."
+# CapsBench Official Configuration
+# ==========================================
 
-# THE REFEREE (Green Agent / Leaderboard)
-[leaderboard]
-id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+[green_agent]
+# El Estadio (CapsBench Leaderboard)
+agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+env = { GEMINI_API_KEY = "${GEMINI_API_KEY}" }
 
-# THE PLAYERS (Purple Agents)
-[[agents]]
-id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
-count = 1  # Number of instances (1 player)
+[[participants]]
+# El Jugador (Purple Agent)
+name = "Purple-Gemini-Flash"
+agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
+env = { GEMINI_API_KEY = "${GEMINI_API_KEY}" }
+
+[config]
+# Configuración de la partida
+num_games = 1
