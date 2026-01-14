@@ -1,16 +1,15 @@
 [green_agent]
-agentbeats_id = ""
-env = { API_KEY = "${GITHUB_SECRET_NAME}", LOG_LEVEL = "INFO" }
-
-[[participants]]
-agentbeats_id = ""
-name = "role_1_name"
+# The Stadium (Your CapsBench Environment)
+image = "ghcr.io/star-xai-protocol/capsbench:v1.0"
 env = {}
 
 [[participants]]
-agentbeats_id = ""
-name = "role_2_name"
-env = {}
+# The Player (Your Gemini Agent)
+image = "ghcr.io/star-xai-protocol/capsbench-purple:v1.0"
+name = "Purple-Gemini"
+env = { GEMINI_API_KEY = "${GEMINI_API_KEY}" }
 
 [config]
-# Add your assessment config here
+# Match Configuration
+domain = "logic"
+num_tasks = 1
