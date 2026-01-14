@@ -10,4 +10,4 @@ agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [config]
-num_games = 1
+num_tasks = 1
