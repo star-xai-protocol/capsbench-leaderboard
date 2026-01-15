@@ -1,8 +1,10 @@
 [green_agent]
-image = "ghcr.io/star-xai-protocol/capsbench:v1.0.0"
+# Tu ID oficial (Ahora que hay Release v1.0, debería funcionar)
+agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
+# ID de Gemini Flash
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
