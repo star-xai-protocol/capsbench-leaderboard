@@ -1,6 +1,5 @@
 [green_agent]
-# agentbeats_id = "BORRADO O COMENTADO"  <-- ¡Esta línea fuera!
-image = "ghcr.io/star-xai-protocol/capsbench:v1.0.0"  <-- Esta es la que manda
+image = "ghcr.io/star-xai-protocol/capsbench:v1.0.0"
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
