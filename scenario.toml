@@ -1,8 +1,6 @@
 [green_agent]
-# El ID para los puntos
-agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-# ¡ESTA ES LA LÍNEA QUE FALTA! Le decimos dónde está el Docker
-image = "ghcr.io/star-xai-protocol/capsbench:latest" 
+# agentbeats_id = "BORRADO O COMENTADO"  <-- ¡Esta línea fuera!
+image = "ghcr.io/star-xai-protocol/capsbench:v1.0.0"  <-- Esta es la que manda
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
