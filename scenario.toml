@@ -1,10 +1,11 @@
 [green_agent]
-# Configuración del Árbitro (Estadio)
+# El ID para los puntos
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+# ¡ESTA ES LA LÍNEA QUE FALTA! Le decimos dónde está el Docker
+image = "ghcr.io/star-xai-protocol/capsbench:latest" 
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
-# Configuración del Jugador (Flash)
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
