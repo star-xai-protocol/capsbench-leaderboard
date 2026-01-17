@@ -8,7 +8,7 @@ env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 name = "Purple-Gemini-Flash"
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
 # env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green_agent:9009" }
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
 
 [config]
 num_games = 1
