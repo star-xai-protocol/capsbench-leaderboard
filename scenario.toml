@@ -1,7 +1,7 @@
 [green_agent]
 # Tu ID oficial (Ahora que hay Release v1.0, debería funcionar)
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-env = { }" }
+env = { }
 
 [[participants]]
 # ID de Gemini Flash
