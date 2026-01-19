@@ -8,6 +8,7 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    if: github.event.repository.fork == true || github.ref != 'refs/heads/main'
     permissions:
       contents: write
       packages: read
@@ -22,10 +23,22 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install tomli
+        run: pip install tomli tomli-w pyyaml requests
 
       - name: Generate docker-compose.yml
         run: python generate_compose.py --scenario scenario.toml
+
+      - name: Pull images
+        run: |
+          if ! docker compose pull; then
+            echo ""
+            echo "Error: Failed to pull one or more images."
+            echo "Ensure all images are publicly accessible."
+            echo "For ghcr.io images, check package settings at:"
+            echo "  https://github.com/orgs/YOUR_ORG/packages or"
+            echo "  https://github.com/users/YOUR_USER/packages"
+            exit 1
+          fi
 
       - name: Create output directory
         run: mkdir -p output && chmod 777 output
@@ -56,7 +69,10 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Run assessment
-        run: docker compose up --exit-code-from agentbeats-client --abort-on-container-exit
+        run: docker compose up --timestamps --no-color --exit-code-from agentbeats-client --abort-on-container-exit
+
+      - name: Record provenance
+        run: python record_provenance.py --compose docker-compose.yml --output output/provenance.json
 
       - name: Generate submission metadata
         id: metadata
@@ -71,6 +87,7 @@ jobs:
         run: |
           cp scenario.toml submissions/${{ steps.metadata.outputs.unique_name }}.toml
           cp output/results.json results/${{ steps.metadata.outputs.unique_name }}.json
+          cp output/provenance.json submissions/${{ steps.metadata.outputs.unique_name }}.provenance.json
 
       - name: Determine target repository
         id: target
@@ -91,7 +108,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add submissions/${{ steps.metadata.outputs.unique_name }}.toml results/${{ steps.metadata.outputs.unique_name }}.json
+          git add submissions/${{ steps.metadata.outputs.unique_name }}.toml submissions/${{ steps.metadata.outputs.unique_name }}.provenance.json results/${{ steps.metadata.outputs.unique_name }}.json
           git commit -m "Submission: ${{ steps.metadata.outputs.unique_name }}
 
           Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -101,7 +118,7 @@ jobs:
       - name: Output PR link
         run: |
           echo "### Submit your results" >> $GITHUB_STEP_SUMMARY
-          echo "[Click here to open a pull request](https://github.com/${{ steps.target.outputs.repo }}/compare/main...${{ github.repository_owner }}:${{ steps.metadata.outputs.branch_name }}?expand=1)" >> $GITHUB_STEP_SUMMARY
+          echo "[Click here to open a pull request](https://github.com/${{ steps.target.outputs.repo }}/compare/main...${{ github.repository_owner }}:${{ github.event.repository.name }}:${{ steps.metadata.outputs.branch_name }}?expand=1)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "⚠️ When creating the PR, UNCHECK 'Allow edits and access to secrets by maintainers' to protect your secrets." >> $GITHUB_STEP_SUMMARY
 
