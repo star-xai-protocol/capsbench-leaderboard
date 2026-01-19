@@ -24,7 +24,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 👇 AQUÍ GENERAMOS EL ARCHIVO CON LA RUTA CORRECTA
+      # 👇 AQUÍ GENERAMOS EL ARCHIVO CON LA RUTA CORRECTA QUE VIMOS EN TU FOTO
       - name: Create Manual docker-compose.yml
         run: |
           cat <<EOF > docker-compose.yml
