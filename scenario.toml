@@ -2,6 +2,8 @@
 # CONFIGURACIÓN DEL AGENTE VERDE (TU REPO)
 # ==========================================
 [green_agent]
+# 🚨 ESTO ES LO MÁS IMPORTANTE: El punto significa "ÚSAME A MÍ"
+image = "."
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
 name = "CapsBench"
 # 🔑 CLAVES: Pasamos la variable con los dos nombres posibles por seguridad.
