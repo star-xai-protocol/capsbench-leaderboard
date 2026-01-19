@@ -20,6 +20,6 @@ env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 
 # ==========================================
-# REGLAS DEL JUEGO (ESTÁNDAR)      
+# REGLAS DEL JUEGO (ESTÁNDAR)       
 # ==========================================
 [config]
