@@ -1,16 +1,25 @@
+# ==========================================
+# CONFIGURACIÓN DEL AGENTE VERDE (TU REPO)
+# ==========================================
 [green_agent]
-agentbeats_id = ""
-env = { API_KEY = "${GITHUB_SECRET_NAME}", LOG_LEVEL = "INFO" }
+agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+name = "CapsBench"
+# 🔑 CLAVES: Pasamos la variable con los dos nombres posibles por seguridad.
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
+
+# ==========================================
+# CONFIGURACIÓN DEL PARTICIPANTE (PÚRPURA)
+# ==========================================
 [[participants]]
-agentbeats_id = ""
-name = "role_1_name"
-env = {}
 
-[[participants]]
-agentbeats_id = ""
-name = "role_2_name"
-env = {}
+# ID del agente competidor
+agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
+name = "Purple-Gemini-Flash"
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
 
+
+# ==========================================
+# REGLAS DEL JUEGO (ESTÁNDAR)
+# ==========================================
 [config]
-# Add your assessment config here
