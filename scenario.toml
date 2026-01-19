@@ -3,6 +3,7 @@
 # ==========================================
 [green_agent]
 agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+image= "ghcr.io/star-xai-protocol/capsbench:v1.0"
 name = "CapsBench"
 # 🔑 CLAVES: Pasamos la variable con los dos nombres posibles por seguridad.
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
