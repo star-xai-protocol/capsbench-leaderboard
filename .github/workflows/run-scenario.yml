@@ -17,7 +17,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Login en GitHub Packages (Necesario para descargar al rival Púrpura)
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -25,20 +24,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2. 🟢 PASO MAESTRO: CREACIÓN MANUAL DEL DOCKER COMPOSE 🟢
-      # Esto sustituye al script de Python. Escribimos la configuración exacta que funciona.
+      # 👇 AQUÍ GENERAMOS EL ARCHIVO CON LA RUTA CORRECTA
       - name: Create Manual docker-compose.yml
         run: |
           cat <<EOF > docker-compose.yml
           services:
-            # TU AGENTE (Se construye desde tu código actual)
             green-agent:
               build:
                 context: .
-                dockerfile: Dockerfile
+                dockerfile: Dockerfile 
               ports:
                 - "9009:9009"
-              # Chequeo de salud para esperar a que arranque
               healthcheck:
                 test: ["CMD", "curl", "-f", "http://localhost:9009/.well-known/agent-card.json"]
                 interval: 5s
@@ -48,7 +44,6 @@ jobs:
               networks:
                 - agent-network
 
-            # EL RIVAL (Se descarga de la imagen oficial)
             purple-agent:
               image: ghcr.io/star-xai-protocol/capsbench-purple:v1.0
               environment:
@@ -60,7 +55,6 @@ jobs:
               networks:
                 - agent-network
 
-            # EL ÁRBITRO (Controla el escenario)
             agentbeats-client:
               image: ghcr.io/agentbeats/agentbeats-client:v1.0.0
               volumes:
@@ -79,18 +73,14 @@ jobs:
             agent-network:
           EOF
 
-      # 3. Preparar carpetas de salida
       - name: Prepare Output Directory
         run: mkdir -p output && chmod 777 output
 
-      # 4. Inyectar Secretos (Tu API Key)
       - name: Create .env file
         env:
           SECRETS_JSON: ${{ toJson(secrets) }}
         run: echo "$SECRETS_JSON" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]' > .env
 
-      # 5. 🚀 EJECUTAR LA BATALLA
-      # Usamos --build para asegurar que compila tu código nuevo
       - name: Run Scenario
         run: docker compose up --build --timestamps --no-color --exit-code-from agentbeats-client --abort-on-container-exit
 
