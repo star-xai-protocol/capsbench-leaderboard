@@ -2,7 +2,7 @@
 # CONFIGURACIÓN DEL AGENTE VERDE (TU REPO)
 # ==========================================
 [green_agent]
-agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
+# agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
 image= "ghcr.io/star-xai-protocol/capsbench:v1.0"
 name = "CapsBench"
 # 🔑 CLAVES: Pasamos la variable con los dos nombres posibles por seguridad.
