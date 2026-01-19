@@ -2,8 +2,7 @@
 # CONFIGURACIÓN DEL AGENTE VERDE (TU REPO)
 # ==========================================
 [green_agent]
-# agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
-image= "ghcr.io/star-xai-protocol/capsbench:v1.0"
+agentbeats_id = "019bbe35-69c5-7b21-aeb8-f6da30c6fa58"
 name = "CapsBench"
 # 🔑 CLAVES: Pasamos la variable con los dos nombres posibles por seguridad.
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
@@ -17,7 +16,7 @@ env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 # ID del agente competidor
 agentbeats_id = "019bbe55-0acc-7cd1-8c5f-2cdd1dd3f313"
 name = "Purple-Gemini-Flash"
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 
 # ==========================================
