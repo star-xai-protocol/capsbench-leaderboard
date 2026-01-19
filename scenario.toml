@@ -9,7 +9,7 @@ env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 
 # ==========================================
-# CONFIGURACIÓN DEL PARTICIPANTE (PÚRPURA)
+# CONFIGURACIÓN DEL PARTICIPANTE (PÚRPURA) 
 # ==========================================
 [[participants]]
 
