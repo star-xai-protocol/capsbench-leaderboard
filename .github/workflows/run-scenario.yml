@@ -26,12 +26,20 @@ jobs:
         run: pip install tomli tomli-w pyyaml requests
 
       - name: Generate docker-compose.yml
-        env:
-          GITHUB_ACTIONS: "false"
         run: python generate_compose.py --scenario scenario.toml
 
-
-
+      - name: Pull images
+        run: |
+          if ! docker compose pull; then
+            echo ""
+            echo "Error: Failed to pull one or more images."
+            echo "Ensure all images are publicly accessible."
+            echo "For ghcr.io images, check package settings at:"
+            echo "  https://github.com/orgs/YOUR_ORG/packages or"
+            echo "  https://github.com/users/YOUR_USER/packages"
+            exit 1
+          fi
+          
       - name: Create output directory
         run: mkdir -p output && chmod 777 output
 
