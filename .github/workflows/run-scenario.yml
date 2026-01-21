@@ -2,9 +2,10 @@ name: Run Scenario Evaluation
 
 on:
   push:
-    branches:
-      - '**'
+    branches: ["**"]
   pull_request:
+  # 👇 ESTO ES NUEVO: Te permitirá lanzar el test pulsando un botón
+  workflow_dispatch:
 
 jobs:
   run:
@@ -24,29 +25,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 👇 DIAGNÓSTICO EXTREMO: ¿Qué hay realmente en el servidor?
-      - name: 🕵️ DEBUG - List Files on Server
+      # 🔍 DIAGNÓSTICO: ¿Está la carpeta src?
+      - name: DEBUG - Check Server Files
         run: |
-          echo "📂 --- LISTADO DE ARCHIVOS EN EL SERVIDOR (GIT) ---"
-          ls -R
-          echo "---------------------------------------------------"
-          
-          if [ -d "src" ]; then
-            echo "✅ ¡BINGO! La carpeta 'src' EXISTE en el servidor."
-          else
-            echo "❌ ERROR FATAL: La carpeta 'src' NO EXISTE en el servidor."
-            echo "Esto significa que 'git push' no funcionó como esperabas."
-            exit 1  # Forzamos fallo aquí para no perder tiempo con Docker
+          echo "📂 Buscando carpeta src..."
+          if [ -d "src" ]; then 
+            echo "✅ EXISTE. Contenido:"
+            ls -R src
+          else 
+            echo "❌ NO EXISTE (Problema de Git)"
           fi
 
-      # 👇 BORRAMOS EL .dockerignore PARA QUE DOCKER COPIE TODO
-      - name: 🚨 EMERGENCY - Clean Docker Ignore
-        run: |
-          echo "🧹 Buscando y borrando .dockerignore..."
-          rm -f .dockerignore
-          echo "✅ .dockerignore eliminado (si existía)."
+      # 🧹 LIMPIEZA: Borrar .dockerignore
+      - name: Cleanup Ignore Files
+        run: rm -f .dockerignore
 
-      # 👇 EL DOCKERFILE QUE LO COPIA TODO
+      # 🐳 DOCKERFILE: Fabricación manual
       - name: Create Dockerfile
         run: |
           cat <<EOF > Dockerfile
@@ -54,24 +48,15 @@ jobs:
           ENV PYTHONDONTWRITEBYTECODE=1
           ENV PYTHONUNBUFFERED=1
           WORKDIR /app
-          
-          # Herramientas
           RUN apt-get update && apt-get install -y curl findutils && rm -rf /var/lib/apt/lists/*
-          
-          # Librerías
           RUN pip install --no-cache-dir requests toml
-          
-          # 👇 COPIAMOS TODO (Ahora que no hay .dockerignore, copiará src sí o sí)
+          # Copiamos TODO
           COPY . .
-          
-          # 👇 DEPURACIÓN DENTRO DE DOCKER (Para ver qué ha copiado)
-          RUN echo "📂 --- LISTADO DENTRO DE DOCKER ---" && ls -R && echo "-----------------------------"
-          
-          # Ejecución inteligente
-          CMD ["sh", "-c", "export AGENT_FILE=\$(find . -name green_agent.py -print -quit); if [ -z \"\$AGENT_FILE\" ]; then echo '❌ ERROR CRÍTICO: Sigue sin aparecer green_agent.py'; exit 1; else python \"\$AGENT_FILE\" --host 0.0.0.0 --port 9009; fi"]
+          # Comando de búsqueda y ejecución
+          CMD ["sh", "-c", "target=\$(find . -name green_agent.py -print -quit); if [ -z \"\$target\" ]; then echo '❌ ERROR: No encuentro el agente'; find . -maxdepth 4; exit 1; else echo \"✅ Arrancando: \$target\"; export PYTHONPATH=\$PYTHONPATH:\$(dirname \$target):/app/src; python \"\$target\" --host 0.0.0.0 --port 9009; fi"]
           EOF
 
-      - name: Create Manual docker-compose.yml
+      - name: Create docker-compose.yml
         run: |
           cat <<EOF > docker-compose.yml
           services:
@@ -89,7 +74,6 @@ jobs:
                 start_period: 5s
               networks:
                 - agent-network
-
             purple-agent:
               image: ghcr.io/star-xai-protocol/capsbench-purple:v1.0
               environment:
@@ -100,7 +84,6 @@ jobs:
                   condition: service_healthy
               networks:
                 - agent-network
-
             agentbeats-client:
               image: ghcr.io/agentbeats/agentbeats-client:v1.0.0
               volumes:
@@ -114,7 +97,6 @@ jobs:
                   condition: service_started
               networks:
                 - agent-network
-
           networks:
             agent-network:
           EOF
