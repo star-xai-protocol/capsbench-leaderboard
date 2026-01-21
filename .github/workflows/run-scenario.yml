@@ -24,10 +24,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 👇 MIRA AQUÍ: Hemos quitado la línea que fallaba (pyproject.toml)
-      # Y ahora instalamos 'requests' directamente. ¡A prueba de balas!
-      - name: 🚨 EMERGENCY - Force Create Dockerfile
+      # 🔍 DIAGNÓSTICO 1: ¿Git se ha bajado la carpeta src?
+      # Si aquí no sale 'src', es culpa de Git. Si sale, es culpa de Docker.
+      - name: 🕵️ DEBUG - Check Files on Runner
         run: |
+          echo "📂 Listando archivos en el servidor de GitHub (Antes de Docker):"
+          ls -la
+          echo "📂 ¿Existe la carpeta src?"
+          if [ -d "src" ]; then 
+            echo "✅ SÍ, src existe. Contenido:"
+            ls -R src
+          else 
+            echo "❌ NO, src no existe en el servidor."
+          fi
+
+      # 👇 LA SOLUCIÓN: Borramos .dockerignore para que no bloquee nada
+      - name: 🚨 EMERGENCY - Force Dockerfile & Clean Ignore
+        run: |
+          echo "🧹 Borrando .dockerignore por si acaso..."
+          rm -f .dockerignore
+
           echo "Fabricando Dockerfile de emergencia..."
           cat <<EOF > Dockerfile
           FROM python:3.11-slim
@@ -35,20 +51,18 @@ jobs:
           ENV PYTHONUNBUFFERED=1
           WORKDIR /app
           
-          # Instalamos curl (necesario)
-          RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+          # Instalamos herramientas básicas
+          RUN apt-get update && apt-get install -y --no-install-recommends curl findutils && rm -rf /var/lib/apt/lists/*
           
-          # 👇 CAMBIO CLAVE: Instalamos dependencias directas en lugar de copiar archivos
+          # Instalamos librerías
           RUN pip install --no-cache-dir requests toml
           
-          # Copiamos el código del proyecto
+          # Copiamos TODO (Al no haber .dockerignore, copiará src sí o sí)
           COPY . .
           
-          # Comando de arranque (Asegurando la ruta correcta)
-          CMD ["python", "src/capsbench/green_agent.py", "--host", "0.0.0.0", "--port", "9009"]
+          # Buscamos y ejecutamos
+          CMD ["sh", "-c", "export AGENT_FILE=\$(find . -name green_agent.py -print -quit); if [ -z \"\$AGENT_FILE\" ]; then echo '❌ ERROR: green_agent.py sigue sin aparecer. Listado final:'; find . -maxdepth 3; exit 1; else echo \"✅ ENCONTRADO EN: \$AGENT_FILE\"; export PYTHONPATH=\$PYTHONPATH:\$(dirname \$AGENT_FILE):/app/src; python \"\$AGENT_FILE\" --host 0.0.0.0 --port 9009; fi"]
           EOF
-          
-          echo "✅ Dockerfile creado y dependencias simplificadas."
 
       - name: Create Manual docker-compose.yml
         run: |
