@@ -4,7 +4,6 @@ on:
   push:
     branches: ["**"]
   pull_request:
-  # 👇 ESTO ES NUEVO: Te permitirá lanzar el test pulsando un botón
   workflow_dispatch:
 
 jobs:
@@ -25,22 +24,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🔍 DIAGNÓSTICO: ¿Está la carpeta src?
+      # 👇 ARMA SECRETA: Borramos .gitignore Y .dockerignore
+      - name: ☢️ NUKE IGNORE FILES
+        run: |
+          echo "🧹 Borrando todas las reglas de ignorar..."
+          rm -f .dockerignore
+          rm -f .gitignore
+          echo "✅ Ahora Docker no tiene excusa para ignorar nada."
+
       - name: DEBUG - Check Server Files
         run: |
-          echo "📂 Buscando carpeta src..."
-          if [ -d "src" ]; then 
-            echo "✅ EXISTE. Contenido:"
-            ls -R src
-          else 
-            echo "❌ NO EXISTE (Problema de Git)"
-          fi
+          echo "📂 Verificando carpeta src..."
+          ls -R src || echo "❌ src sigue sin verse (esto sería imposible tras borrar gitignore)"
 
-      # 🧹 LIMPIEZA: Borrar .dockerignore
-      - name: Cleanup Ignore Files
-        run: rm -f .dockerignore
-
-      # 🐳 DOCKERFILE: Fabricación manual
       - name: Create Dockerfile
         run: |
           cat <<EOF > Dockerfile
@@ -50,10 +46,12 @@ jobs:
           WORKDIR /app
           RUN apt-get update && apt-get install -y curl findutils && rm -rf /var/lib/apt/lists/*
           RUN pip install --no-cache-dir requests toml
-          # Copiamos TODO
+          
+          # Copiamos todo (Ahora sí que sí)
           COPY . .
-          # Comando de búsqueda y ejecución
-          CMD ["sh", "-c", "target=\$(find . -name green_agent.py -print -quit); if [ -z \"\$target\" ]; then echo '❌ ERROR: No encuentro el agente'; find . -maxdepth 4; exit 1; else echo \"✅ Arrancando: \$target\"; export PYTHONPATH=\$PYTHONPATH:\$(dirname \$target):/app/src; python \"\$target\" --host 0.0.0.0 --port 9009; fi"]
+          
+          # Buscamos y ejecutamos
+          CMD ["sh", "-c", "target=\$(find . -name green_agent.py -print -quit); if [ -z \"\$target\" ]; then echo '❌ ERROR: Sigue sin aparecer'; find . -maxdepth 4; exit 1; else echo \"✅ ENCONTRADO: \$target\"; export PYTHONPATH=\$PYTHONPATH:\$(dirname \$target):/app/src; python \"\$target\" --host 0.0.0.0 --port 9009; fi"]
           EOF
 
       - name: Create docker-compose.yml
