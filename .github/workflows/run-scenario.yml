@@ -24,9 +24,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 👇 AQUÍ ES DONDE OCURRE LA MAGIA (Y EL ERROR ANTERIOR)
-      # Este paso crea el archivo en el momento. Si aquí dice Dockerfile, buscará Dockerfile.
-      # Lo hemos cambiado para que escriba "DockerfileGreen".
+      # 👇👇👇 EL TRUCO DE MAGIA 👇👇👇
+      # Como Git nos está fallando, creamos el Dockerfile aquí mismo a la fuerza.
+      - name: 🚨 EMERGENCY - Force Create Dockerfile
+        run: |
+          echo "Fabricando Dockerfile de emergencia..."
+          cat <<EOF > Dockerfile
+          FROM python:3.11-slim
+          ENV PYTHONDONTWRITEBYTECODE=1
+          ENV PYTHONUNBUFFERED=1
+          WORKDIR /app
+          RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+          # Instalamos dependencias
+          COPY pyproject.toml .
+          RUN pip install --no-cache-dir .
+          # Copiamos el código
+          COPY . .
+          # Comando de arranque
+          CMD ["python", "src/capsbench/green_agent.py", "--host", "0.0.0.0", "--port", "9009"]
+          EOF
+          
+          # Comprobamos que se ha creado
+          echo "✅ Dockerfile creado. Contenido:"
+          ls -la Dockerfile
+
+      # 👇 Creamos el docker-compose apuntando al archivo que acabamos de fabricar
       - name: Create Manual docker-compose.yml
         run: |
           cat <<EOF > docker-compose.yml
