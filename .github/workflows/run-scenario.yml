@@ -34,7 +34,7 @@ jobs:
             green-agent:
               build:
                 context: .
-                dockerfile: DockerfileGreen
+                dockerfile: Dockerfile
               ports:
                 - "9009:9009"
               healthcheck:
