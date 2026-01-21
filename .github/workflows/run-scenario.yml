@@ -24,8 +24,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 👇 MIRA AQUÍ: Hemos quitado la línea que fallaba (pyproject.toml)
-      # Y ahora instalamos 'requests' directamente. ¡A prueba de balas!
+      # 👇 MIRA ESTO: Hemos hecho el Dockerfile "A prueba de fallos"
       - name: 🚨 EMERGENCY - Force Create Dockerfile
         run: |
           echo "Fabricando Dockerfile de emergencia..."
@@ -35,20 +34,20 @@ jobs:
           ENV PYTHONUNBUFFERED=1
           WORKDIR /app
           
-          # Instalamos curl (necesario)
-          RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+          # Instalamos curl y 'findutils' para poder buscar el archivo
+          RUN apt-get update && apt-get install -y --no-install-recommends curl findutils && rm -rf /var/lib/apt/lists/*
           
-          # 👇 CAMBIO CLAVE: Instalamos dependencias directas en lugar de copiar archivos
+          # Instalamos librerías
           RUN pip install --no-cache-dir requests toml
           
-          # Copiamos el código del proyecto
+          # Copiamos todo el proyecto
           COPY . .
           
-          # Comando de arranque (Asegurando la ruta correcta)
-          CMD ["python", "src/capsbench/green_agent.py", "--host", "0.0.0.0", "--port", "9009"]
+          # 👇 COMANDO MAESTRO: Busca el archivo green_agent.py donde sea que esté y lo ejecuta
+          CMD ["sh", "-c", "export AGENT_FILE=\$(find . -name green_agent.py -print -quit); if [ -z \"\$AGENT_FILE\" ]; then echo '❌ ERROR CRÍTICO: No encuentro green_agent.py en ninguna carpeta'; find . -maxdepth 3; exit 1; else echo \"✅ Agente encontrado en: \$AGENT_FILE\"; export PYTHONPATH=\$PYTHONPATH:\$(dirname \$AGENT_FILE):/app/src; python \"\$AGENT_FILE\" --host 0.0.0.0 --port 9009; fi"]
           EOF
           
-          echo "✅ Dockerfile creado y dependencias simplificadas."
+          echo "✅ Dockerfile creado con auto-detección de ruta."
 
       - name: Create Manual docker-compose.yml
         run: |
