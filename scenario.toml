@@ -1,16 +1,30 @@
+# ==========================================
+# 🏟️ CONFIGURACIÓN DEL ÁRBITRO (GREEN AGENT)
+# ==========================================
 [green_agent]
-agentbeats_id = ""
-env = { API_KEY = "${GITHUB_SECRET_NAME}", LOG_LEVEL = "INFO" }
+# ID DEL GREEN (CapsBench)
+agentbeats_id = "019c0c11-ce03-77e0-91b3-fa958206b1fc"
 
+# Configuración del entorno (Puerto y Logs)
+env = { PORT = "9009", LOG_LEVEL = "INFO" }
+
+
+# ==========================================
+# 🟣 CONFIGURACIÓN DEL JUGADOR (PURPLE AGENT)
+# ==========================================
 [[participants]]
-agentbeats_id = ""
-name = "role_1_name"
-env = {}
+# ID DEL PURPLE
+agentbeats_id = "019c0b17-335b-7553-8b43-81d097bb5387"
+name = "purple_agent"
 
-[[participants]]
-agentbeats_id = ""
-name = "role_2_name"
-env = {}
+# Aquí le pasamos la API KEY segura de GitHub al contenedor
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
 
+
+# ==========================================
+# ⚙️ REGLAS DE SEGURIDAD
+# ==========================================
 [config]
-# Add your assessment config here
+# Seguro de vida: Si la partida se cuelga, GitHub la corta a los 100 turnos.
+max_turns = 100
+
