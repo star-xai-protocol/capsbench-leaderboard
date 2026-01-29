@@ -9,7 +9,7 @@ agentbeats_id = "019c0c11-ce03-77e0-91b3-fa958206b1fc"
 env = { PORT = "9009", LOG_LEVEL = "INFO" }
 
 
-# ==========================================
+# ========================================== 
 # 🟣 CONFIGURACIÓN DEL JUGADOR (PURPLE AGENT)
 # ==========================================
 [[participants]]
