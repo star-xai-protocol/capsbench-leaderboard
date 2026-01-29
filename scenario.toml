@@ -3,8 +3,8 @@
 # ==========================================
 [green_agent]
 # ID DEL GREEN (CapsBench)
-agentbeats_id = "019c0aea-b580-7593-a671-1270e4521619"
-image = ghcr.io/star-xai-protocol/capsbench:latest
+# agentbeats_id = "019c0aea-b580-7593-a671-1270e4521619"
+image = "ghcr.io/star-xai-protocol/capsbench:latest"
 
 # Configuración del entorno (Puerto y Logs)
 env = { PORT = "9009", LOG_LEVEL = "INFO" }
