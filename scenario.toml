@@ -10,7 +10,7 @@ env = { PORT = "9009", LOG_LEVEL = "INFO" }
 
 
 # ==========================================
-# 🟣 CONFIGURACIÓN DEL JUGADOR (PURPLE AGENT)
+# 🟣 CONFIGURACIÓN DEL JUGADOR (PURPLE AGENT) 
 # ==========================================
 [[participants]]
 # ID DEL PURPLE
