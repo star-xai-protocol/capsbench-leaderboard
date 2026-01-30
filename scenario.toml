@@ -4,14 +4,13 @@
 [green_agent]
 # ID DEL GREEN (CapsBench)
 agentbeats_id = "019c0c11-ce03-77e0-91b3-fa958206b1fc"
-# Aquí le pasamos la API KEY segura de GitHub al contenedor
-env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
+
 # Configuración del entorno (Puerto y Logs)
 env = { PORT = "9009", LOG_LEVEL = "INFO" }
 
 
 # ==========================================
-# 🟣 CONFIGURACIÓN DEL JUGADOR (PURPLE AGENT)
+# 🟣 CONFIGURACIÓN DEL JUGADOR (PURPLE AGENT) 
 # ==========================================
 [[participants]]
 # ID DEL PURPLE
