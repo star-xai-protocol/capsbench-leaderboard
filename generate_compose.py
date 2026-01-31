@@ -59,17 +59,28 @@ COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    image: {green_image}
+    # 1. Tu imagen Linux/AMD64
+    image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
-    command: ["--host", "0.0.0.0", "--port", "{green_port}", "--card-url", "http://green-agent:{green_port}"]
+    
+    # 🚨 LA CLAVE: Sobrescribimos el ENTRYPOINT para añadir '-u' (unbuffered)
+    # Esto arregla el silencio y evita el choque con el Dockerfile.
+    entrypoint: ["python", "-u", "src/green_agent.py"]
+    
+    # 2. Argumentos limpios
+    command: ["--host", "0.0.0.0", "--port", "{green_port}"]
+    
     environment:{green_env}
+    
+    # 3. Healthcheck apuntando a /status (que SÍ existe)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/.well-known/agent-card.json"]
+      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
       interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+      
     depends_on:{green_depends}
     networks:
       - agent-network
