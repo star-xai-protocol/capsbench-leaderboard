@@ -57,20 +57,21 @@ DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
+COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
+
 services:
   green-agent:
-    # 👇 1. FORZAMOS LA IMAGEN QUE ARREGLASTE A MANO
+    # 1. IMAGEN MANUAL CORRECTA
     image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 2. COMANDO NORMAL (Tu Python ya tiene 'argparse', funcionará bien)
+    # 2. COMANDO NORMAL
     command: ["--host", "0.0.0.0", "--port", "{green_port}"]
     
     environment:{green_env}
     
-    # 👇 3. LA CLAVE DEL ÉXITO (Healthcheck corregido)
-    # Antes buscaba un json que no existe. Ahora busca /status que SÍ existe.
+    # 3. HEALTHCHECK QUE SÍ EXISTE
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
       interval: 5s
@@ -81,7 +82,7 @@ services:
     depends_on:{green_depends}
     networks:
       - agent-network
-      
+
 {participant_services}
   agentbeats-client:
     image: ghcr.io/agentbeats/agentbeats-client:v1.0.0
