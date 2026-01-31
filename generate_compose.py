@@ -59,30 +59,21 @@ COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    image: {green_image}
+    # Usamos tu imagen pública latest
+    image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # 🚨 DEBUG RADICAL:
-    # 1. Imprimimos "HOLA" para ver si el contenedor funciona.
-    # 2. Listamos TODOS los archivos en /app para ver dónde está tu código.
-    # 3. Intentamos ejecutar Python forzando los logs (-u).
-    entrypoint: [
-      "sh", "-c",
-      "echo '🟢 ESTOY VIVO'; ls -R /app; echo '🚀 LANZANDO PYTHON...'; python -u src/green_agent.py || echo '❌ PYTHON FALLÓ'"
-    ]
+    # 🕵️ AUTORIDAD FORENSE:
+    # No ejecutamos Python. Leemos el archivo para ver si tiene argparse.
+    entrypoint: ["cat", "src/green_agent.py"]
     
-    # Borramos el command para que no interfiera
+    # Borramos el command
     command: []
     
     environment:{green_env}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/.well-known/agent-card.json"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
-    depends_on:{green_depends}
+    # (Deja el resto igual: networks, etc. 
+    #  ELIMINA 'healthcheck' y 'depends_on' temporalmente para que no falle esperando)
     networks:
       - agent-network
 
