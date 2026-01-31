@@ -74,7 +74,7 @@ import tomli
 import shutil
 import time  # <--- ¡ESTO ES LO QUE FALTABA!
 
-# 🏆 FASE FINAL: MODO "JUEGO REAL" OBLIGATORIO (CORREGIDO)
+# 🏆 FASE FINAL: MODO "VIGILANTE" (TABULA RASA)
 # Este script fuerza la recreación del contenedor y aplica el parche de espera activa.
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
@@ -103,8 +103,8 @@ services:
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      # 👇 Truco: Timestamp para forzar a Docker a recrear el contenedor limpio
-      - FORCE_RECREATE=try_final_real_game_{timestamp}
+      # 👇 Force Recreate para borrar parches antiguos
+      - FORCE_RECREATE=final_attempt_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -300,7 +300,6 @@ def main():
       - agent-network
 """
 
-    # Inyectamos timestamp para forzar recreación
     final_compose = COMPOSE_TEMPLATE.format(
         participant_services=participant_services,
         timestamp=int(time.time())
@@ -310,7 +309,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO ACTUALIZADO: Import time añadido. ¡A jugar!")
+    print("✅ CÓDIGO LIMPIO: VIGILANTE ACTIVADO.")
 
 if __name__ == "__main__":
     main()
