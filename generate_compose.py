@@ -59,22 +59,35 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🧪 PRUEBA FINAL: Capsbench Dormilón
+# 🚀 FASE FINAL: Ejecución Real Blindada
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    # 👇 VOLVEMOS A TU IMAGEN REAL
     image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # 💤 LA PRUEBA: Le ordenamos que NO ejecute Python, solo que duerma.
-    # Si esto falla (NameResolutionError), tu imagen está MAL COMPILADA (Error de CPU/Arch).
-    # Si esto funciona (ConnectionRefused), tu imagen está bien, pero tu Python crashea.
-    entrypoint: ["/bin/sh", "-c", "echo '🟢 CAPSBENCH DURMIENDO...'; sleep infinity"]
+    # 🔨 EL ARRANQUE SEGURO:
+    # 1. Imprimimos "ARRANCANDO".
+    # 2. Listamos los archivos (ls -R) para ver dónde está tu código realmente.
+    # 3. Ejecutamos Python con -u (unbuffered) para ver cualquier error al instante.
+    entrypoint: ["/bin/sh", "-c", "echo '🟢 ARRANCANDO PYTHON...'; echo '📂 CONTENIDO DE LA CARPETA:'; ls -R /app; python -u src/green_agent.py --host 0.0.0.0 --port {green_port}"]
     
+    # Command vacío para que no estorbe
     command: []
+    
+    environment:{green_env}
+    
+    # Recuperamos el healthcheck ahora que sabemos que el contenedor vive
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+    depends_on:{green_depends}
     networks:
       - agent-network
 
@@ -298,7 +311,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ PRUEBA DE SUEÑO CONFIGURADA")
+    print("✅ MODO EJECUCIÓN ACTIVADO")
 
 if __name__ == "__main__":
     main()
