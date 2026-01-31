@@ -59,7 +59,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: STREAMING RPC COMPLIANT
+# 🏆 FASE FINAL: SINTAXIS BLINDADA (CHR 10 TRICK)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -68,14 +68,14 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 💉 INYECCIÓN MAESTRA (SSE STREAMING):
-    # 1. Inyectamos las importaciones necesarias (Response, stream_with_context).
-    # 2. Inyectamos la Agent Card Completa.
-    # 3. Inyectamos un manejador SSE REAL en '/' que devuelve un evento dummy y cierra.
-    #    Esto satisface al cliente que espera 'text/event-stream'.
+    # 💉 INYECCIÓN INTELIGENTE:
+    # 1. Importamos librerías.
+    # 2. Inyectamos la Agent Card completa.
+    # 3. TRUCO MAESTRO: Usamos 'chr(10)' para los saltos de línea del stream.
+    #    Esto evita que 'sed' rompa las comillas y genere SyntaxError.
     entrypoint: [
       "/bin/sh", "-c",
-      "sed -i \\"1i from flask import Response, stream_with_context\\" src/green_agent.py; sed -i \\"/app = Flask(__name__)/a @app.route('/.well-known/agent-card.json')\\\\ndef agent_card(): return jsonify({{ 'name': 'CapsBench Green Agent', 'description': 'Legacy Wrapper', 'version': '1.0.0', 'url': 'http://green-agent:9009/', 'protocolVersion': '0.3.0', 'capabilities': {{ 'streaming': True }}, 'defaultInputModes': ['text'], 'defaultOutputModes': ['text'], 'skills': [{{ 'id': 'eval', 'name': 'Evaluation', 'description': 'CapsBench Eval', 'tags': ['evaluation'] }}] }})\\\\n@app.route('/', methods=['POST', 'GET'])\\\\ndef dummy_rpc():\\\\n    def generate():\\\\n        yield 'data: ' + json.dumps({{ 'jsonrpc': '2.0', 'result': 'ok', 'id': request.json.get('id') if request.is_json else 1 }}) + '\\\\n\\\\n'\\\\n    return Response(stream_with_context(generate()), mimetype='text/event-stream')\\" src/green_agent.py; echo '🟢 PARCHE SSE STREAMING APLICADO'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
+      "sed -i \\"1i from flask import Response, stream_with_context\\" src/green_agent.py; sed -i \\"/app = Flask(__name__)/a @app.route('/.well-known/agent-card.json')\\\\ndef agent_card(): return jsonify({{ 'name': 'CapsBench', 'description': 'Legacy', 'version': '1.0.0', 'url': 'http://green-agent:9009/', 'protocolVersion': '0.3.0', 'capabilities': {{ 'streaming': True }}, 'defaultInputModes': ['text'], 'defaultOutputModes': ['text'], 'skills': [{{ 'id': 'eval', 'name': 'Evaluation', 'description': 'CapsBench Eval', 'tags': ['evaluation'] }}] }})\\\\n@app.route('/', methods=['POST', 'GET'])\\\\ndef dummy_rpc():\\\\n    def generate():\\\\n        yield 'data: ' + json.dumps({{ 'jsonrpc': '2.0', 'result': 'ok', 'id': 1 }}) + chr(10) + chr(10)\\\\n    return Response(stream_with_context(generate()), mimetype='text/event-stream')\\" src/green_agent.py; echo '🟢 PARCHE CHR(10) APLICADO'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
     ]
     
     command: []
@@ -249,34 +249,6 @@ def generate_a2a_scenario(scenario: dict[str, Any]) -> str:
     )
 
 
-def generate_env_file(scenario: dict[str, Any]) -> str:
-    green = scenario["green_agent"]
-    participants = scenario.get("participants", [])
-
-    secrets = set()
-
-    # Extract secrets from ${VAR} patterns in env values
-    env_var_pattern = re.compile(r'\$\{([^}]+)\}')
-
-    for value in green.get("env", {}).values():
-        for match in env_var_pattern.findall(str(value)):
-            secrets.add(match)
-
-    for p in participants:
-        for value in p.get("env", {}).values():
-            for match in env_var_pattern.findall(str(value)):
-                secrets.add(match)
-
-    if not secrets:
-        return ""
-
-    lines = []
-    for secret in sorted(secrets):
-        lines.append(f"{secret}=")
-
-    return "\n".join(lines) + "\n"
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenario", required=True)
@@ -314,7 +286,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO GENERADO: SSE Streaming habilitado.")
+    print("✅ CÓDIGO GENERADO: Parche de sintaxis seguro aplicado.")
 
 if __name__ == "__main__":
     main()
