@@ -4,6 +4,10 @@ import argparse
 import os
 import re
 import sys
+
+import tomli
+import shutil
+
 from pathlib import Path
 from typing import Any
 
@@ -55,27 +59,21 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
+# 🧟 CÓDIGO ZOMBIE (Si ves esto en el archivo, ES EL BUENO)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    # 🧟 PRUEBA ZOMBIE: Usamos Alpine, la imagen más ligera que existe.
+    # 👇 SI ESTO NO ES 'alpine', NO SE HA ACTUALIZADO EL ARCHIVO
     image: alpine:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # 🔨 EL FIX: Bucle infinito. 
-    # Esto mantiene el contenedor encendido SIEMPRE. No se puede apagar por error.
-    entrypoint: ["/bin/sh", "-c", "echo '🟢 ZOMBIE VIVO en puerto 9009'; while true; do nc -l -p 9009 -e echo 'Hola'; done"]
+    # Bucle infinito para que no se apague nunca
+    entrypoint: ["/bin/sh", "-c", "echo '🟢 ZOMBIE VIVO'; while true; do sleep 5; echo 'Sigo vivo...'; done"]
     
-    # Borramos command
+    # Sin command ni healthcheck para evitar errores
     command: []
-    
-    # ❌ QUITAMOS EL HEALTHCHECK:
-    # Eliminamos la causa del error anterior. Docker confiará en que está vivo.
-    
-    environment:{green_env}
-    depends_on:{green_depends}
     networks:
       - agent-network
 
@@ -88,13 +86,46 @@ services:
       - ./a2a-scenario.toml:/app/scenario.toml
       - ./output:/app/output
     command: ["scenario.toml", "output/results.json"]
-    depends_on:{client_depends}
+    depends_on:
+      - green-agent
     networks:
       - agent-network
 
 networks:
   agent-network:
     driver: bridge
+"""
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--scenario", required=True)
+    args = parser.parse_args()
+
+    # Leemos el scenario para sacar al Purple Agent
+    import tomli
+    with open(args.scenario, "rb") as f:
+        config = tomli.load(f)
+
+    participant_services = ""
+    # Generamos el bloque del Purple Agent tal cual
+    for p in config.get("participants", []):
+        name = p.get("name", "purple_agent")
+        env_vars = p.get("env", {})
+        env_block = "\n    environment:"
+        for k, v in env_vars.items():
+            env_block += f"\n      - {k}={v}"
+
+        participant_services += f"""
+  {name}:
+    image: ghcr.io/star-xai-protocol/capsbench-purple:latest
+    platform: linux/amd64
+    container_name: {name}
+    entrypoint: ["python", "-u", "purple_ai.py"]
+    {env_block}
+    depends_on:
+      - green-agent
+    networks:
+      - agent-network
 """
 
 PARTICIPANT_TEMPLATE = """  {name}:
@@ -262,29 +293,47 @@ def generate_env_file(scenario: dict[str, Any]) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate Docker Compose from scenario.toml")
-    parser.add_argument("--scenario", type=Path)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--scenario", required=True)
     args = parser.parse_args()
 
-    if not args.scenario.exists():
-        print(f"Error: {args.scenario} not found")
-        sys.exit(1)
+    # Leemos el scenario para sacar al Purple Agent
+    with open(args.scenario, "rb") as f:
+        config = tomli.load(f)
 
-    scenario = parse_scenario(args.scenario)
+    participant_services = ""
+    
+    # Generamos el bloque del Purple Agent
+    for p in config.get("participants", []):
+        name = p.get("name", "purple_agent")
+        env_vars = p.get("env", {})
+        env_block = "\n    environment:"
+        for k, v in env_vars.items():
+            env_block += f"\n      - {k}={v}"
 
-    with open(COMPOSE_PATH, "w") as f:
-        f.write(generate_docker_compose(scenario))
+        participant_services += f"""
+  {name}:
+    image: ghcr.io/star-xai-protocol/capsbench-purple:latest
+    platform: linux/amd64
+    container_name: {name}
+    entrypoint: ["python", "-u", "purple_ai.py"]
+    {env_block}
+    depends_on:
+      - green-agent
+    networks:
+      - agent-network
+"""
 
-    with open(A2A_SCENARIO_PATH, "w") as f:
-        f.write(generate_a2a_scenario(scenario))
+    # --- AQUÍ ES DONDE SE JUNTAN LAS PIEZAS ---
+    final_compose = COMPOSE_TEMPLATE.format(
+        participant_services=participant_services
+    )
 
-    env_content = generate_env_file(scenario)
-    if env_content:
-        with open(ENV_PATH, "w") as f:
-            f.write(env_content)
-        print(f"Generated {ENV_PATH}")
-
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH}")
+    with open("docker-compose.yml", "w") as f:
+        f.write(final_compose)
+    
+    shutil.copy(args.scenario, "a2a-scenario.toml")
+    print("✅ ZOMBIE ACTIVADO: Usando imagen Alpine")
 
 if __name__ == "__main__":
     main()
