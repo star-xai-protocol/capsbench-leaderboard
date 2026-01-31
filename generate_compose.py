@@ -59,20 +59,21 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🧟 CÓDIGO ZOMBIE (Si ves esto en el archivo, ES EL BUENO)
+# 🧪 PRUEBA FINAL: Capsbench Dormilón
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    # 👇 SI ESTO NO ES 'alpine', NO SE HA ACTUALIZADO EL ARCHIVO
-    image: alpine:latest
+    # 👇 VOLVEMOS A TU IMAGEN REAL
+    image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # Bucle infinito para que no se apague nunca
-    entrypoint: ["/bin/sh", "-c", "echo '🟢 ZOMBIE VIVO'; while true; do sleep 5; echo 'Sigo vivo...'; done"]
+    # 💤 LA PRUEBA: Le ordenamos que NO ejecute Python, solo que duerma.
+    # Si esto falla (NameResolutionError), tu imagen está MAL COMPILADA (Error de CPU/Arch).
+    # Si esto funciona (ConnectionRefused), tu imagen está bien, pero tu Python crashea.
+    entrypoint: ["/bin/sh", "-c", "echo '🟢 CAPSBENCH DURMIENDO...'; sleep infinity"]
     
-    # Sin command ni healthcheck para evitar errores
     command: []
     networks:
       - agent-network
@@ -94,38 +95,6 @@ services:
 networks:
   agent-network:
     driver: bridge
-"""
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--scenario", required=True)
-    args = parser.parse_args()
-
-    # Leemos el scenario para sacar al Purple Agent
-    import tomli
-    with open(args.scenario, "rb") as f:
-        config = tomli.load(f)
-
-    participant_services = ""
-    # Generamos el bloque del Purple Agent tal cual
-    for p in config.get("participants", []):
-        name = p.get("name", "purple_agent")
-        env_vars = p.get("env", {})
-        env_block = "\n    environment:"
-        for k, v in env_vars.items():
-            env_block += f"\n      - {k}={v}"
-
-        participant_services += f"""
-  {name}:
-    image: ghcr.io/star-xai-protocol/capsbench-purple:latest
-    platform: linux/amd64
-    container_name: {name}
-    entrypoint: ["python", "-u", "purple_ai.py"]
-    {env_block}
-    depends_on:
-      - green-agent
-    networks:
-      - agent-network
 """
 
 PARTICIPANT_TEMPLATE = """  {name}:
@@ -297,13 +266,10 @@ def main():
     parser.add_argument("--scenario", required=True)
     args = parser.parse_args()
 
-    # Leemos el scenario para sacar al Purple Agent
     with open(args.scenario, "rb") as f:
         config = tomli.load(f)
 
     participant_services = ""
-    
-    # Generamos el bloque del Purple Agent
     for p in config.get("participants", []):
         name = p.get("name", "purple_agent")
         env_vars = p.get("env", {})
@@ -324,7 +290,6 @@ def main():
       - agent-network
 """
 
-    # --- AQUÍ ES DONDE SE JUNTAN LAS PIEZAS ---
     final_compose = COMPOSE_TEMPLATE.format(
         participant_services=participant_services
     )
@@ -333,7 +298,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ ZOMBIE ACTIVADO: Usando imagen Alpine")
+    print("✅ PRUEBA DE SUEÑO CONFIGURADA")
 
 if __name__ == "__main__":
     main()
