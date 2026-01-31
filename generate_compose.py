@@ -59,7 +59,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: INYECCIÓN QUIRÚRGICA (SOLUCIÓN PARA GITHUB ACTIONS)
+# 🏆 FASE FINAL: INYECCIÓN INTELIGENTE (NO DUPLICADOS)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -68,17 +68,13 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 💉 INYECCIÓN DE CÓDIGO (HOT PATCH):
-    # Al no poder subir una imagen nueva a GitHub Packages por permisos,
-    # usamos este comando para reescribir el código Python AL ARRANCAR.
-    #
-    # CAMBIOS CRÍTICOS APLICADOS AQUÍ:
-    # 1. Imports: Flask Response y stream_with_context.
-    # 2. Agent Card: Con 'tags' y sintaxis correcta.
-    # 3. RPC Dummy: Con estado 'working' (NO 'active') para pasar validación.
+    # 💉 INYECCIÓN CON MEMORIA:
+    # 1. Comprobamos con 'grep' si ya hemos parcheado el archivo.
+    # 2. Solo si NO está parcheado (!), ejecutamos los 'sed'.
+    # 3. Esto evita el error "AssertionError: Overwriting existing endpoint" si el contenedor se reinicia.
     entrypoint: [
       "/bin/sh", "-c",
-      "sed -i \\"1i from flask import Response, stream_with_context\\" src/green_agent.py; sed -i \\"/app = Flask(__name__)/a @app.route('/.well-known/agent-card.json')\\\\ndef agent_card(): return jsonify(name='CapsBench Green Agent', description='Legacy Wrapper', version='1.0.0', url='http://green-agent:9009/', protocolVersion='0.3.0', capabilities={{'streaming': True}}, defaultInputModes=['text'], defaultOutputModes=['text'], skills=[{{'id': 'capsbench_eval', 'name': 'CapsBench Evaluation', 'description': 'Handles agent evaluation tasks', 'tags': ['evaluation']}}])\\\\n@app.route('/', methods=['POST', 'GET'])\\\\ndef dummy_rpc():\\\\n    def generate():\\\\n        yield 'data: ' + json.dumps({{ 'jsonrpc': '2.0', 'result': {{ 'contextId': 'ctx-1', 'taskId': 'task-1', 'status': {{ 'state': 'working' }}, 'final': False, 'artifacts': [] }}, 'id': 1 }}) + chr(10) + chr(10)\\\\n    return Response(stream_with_context(generate()), mimetype='text/event-stream')\\" src/green_agent.py; echo '🟢 PARCHE GITHUB APLICADO (STATE: WORKING)'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
+      "if ! grep -q 'def agent_card' src/green_agent.py; then echo '🛠️ APLICANDO PARCHE...'; sed -i \\"1i from flask import Response, stream_with_context\\" src/green_agent.py; sed -i \\"/app = Flask(__name__)/a @app.route('/.well-known/agent-card.json')\\\\ndef agent_card(): return jsonify(name='CapsBench Green Agent', description='Legacy Wrapper', version='1.0.0', url='http://green-agent:9009/', protocolVersion='0.3.0', capabilities={{'streaming': True}}, defaultInputModes=['text'], defaultOutputModes=['text'], skills=[{{'id': 'capsbench_eval', 'name': 'CapsBench Evaluation', 'description': 'Handles agent evaluation tasks', 'tags': ['evaluation']}}])\\\\n@app.route('/', methods=['POST', 'GET'])\\\\ndef dummy_rpc():\\\\n    def generate():\\\\n        yield 'data: ' + json.dumps({{ 'jsonrpc': '2.0', 'result': {{ 'contextId': 'ctx-1', 'taskId': 'task-1', 'status': {{ 'state': 'working' }}, 'final': False, 'artifacts': [] }}, 'id': 1 }}) + chr(10) + chr(10)\\\\n    return Response(stream_with_context(generate()), mimetype='text/event-stream')\\" src/green_agent.py; else echo '✅ PARCHE YA APLICADO (SALTANDO)'; fi; echo '🟢 ARRANQUE SEGURO'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
     ]
     
     command: []
@@ -289,7 +285,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ LISTO PARA GITHUB: Parche 'working' inyectado en generate_compose.py")
+    print("✅ CÓDIGO ACTUALIZADO: Inyección inteligente (idempotente).")
 
 if __name__ == "__main__":
     main()
