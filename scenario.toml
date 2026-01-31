@@ -1,16 +1,16 @@
 [green_agent]
-agentbeats_id = ""
-env = { API_KEY = "${GITHUB_SECRET_NAME}", LOG_LEVEL = "INFO" }
+# ❌ COMENTAMOS EL ID PARA QUE NO USE LA VERSIÓN VIEJA
+# agentbeats_id = "019c0c11-ce03-77e0-91b3-fa958206b1fc"
+
+# ✅ FORZAMOS LA VERSIÓN 'LATEST' QUE ACABAS DE ARREGLAR
+image = "ghcr.io/star-xai-protocol/capsbench:latest"
+
+env = { PORT = "9009", LOG_LEVEL = "INFO" }
 
 [[participants]]
-agentbeats_id = ""
-name = "role_1_name"
-env = {}
-
-[[participants]]
-agentbeats_id = ""
-name = "role_2_name"
-env = {}
+agentbeats_id = "019c0b17-335b-7553-8b43-81d097bb5387"
+name = "purple_agent"
+env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
 
 [config]
-# Add your assessment config here
+max_turns = 100
