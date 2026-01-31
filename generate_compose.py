@@ -59,19 +59,23 @@ COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    # ✅ MANTÉN TU IMAGEN MANUAL (Esto es clave)
+    # 1. Usamos tu imagen buena (Universal)
     image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # ❌ BORRA la línea 'entrypoint' (la que tenía el "cat")
+    # 🚨 FUERZA BRUTA (Bypass total):
+    # Ignoramos el Entrypoint del Dockerfile.
+    # Lanzamos el comando completo a mano usando 'sh -c' para evitar líos de rutas.
+    # 'python -u': OBLIGA a imprimir los logs instantáneamente (sin buffer).
+    entrypoint: ["sh", "-c", "cd /app && python -u src/green_agent.py --host 0.0.0.0 --port 9009"]
     
-    # ✅ RESTAURA el comando de ejecución
-    command: ["--host", "0.0.0.0", "--port", "9009"]
+    # Dejamos command vacío (ya lo hemos puesto todo en el entrypoint)
+    command: []
     
     environment:{green_env}
     
-    # ✅ RESTAURA el healthcheck para que el Purple Agent sepa cuándo entrar
+    # Healthcheck estándar para que el Purple sepa cuándo entrar
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
       interval: 5s
