@@ -1,16 +1,14 @@
 [green_agent]
-# ❌ COMENTAMOS EL ID PARA QUE NO USE LA VERSIÓN VIEJA 
-# agentbeats_id = "019c0c11-ce03-77e0-91b3-fa958206b1fc"
-
-# ✅ FORZAMOS LA VERSIÓN 'LATEST' QUE ACABAS DE ARREGLAR
+# Usamos tu imagen manual que sabemos que funciona
 image = "ghcr.io/star-xai-protocol/capsbench:latest"
-
-env = { PORT = "9009", LOG_LEVEL = "INFO" }
+env = { PORT = "9009", LOG_LEVEL = "INFO", GOOGLE_API_KEY = "${GOOGLE_API_KEY}" }
 
 [[participants]]
+# ID del Purple Agent (rellénalo si lo tienes, o déjalo vacío si es local)
 agentbeats_id = "019c0b17-335b-7553-8b43-81d097bb5387"
 name = "purple_agent"
+# El Purple Agent NECESITA la clave para pensar y la URL para ver el tablero
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
 
 [config]
-max_turns = 100
+max_turns = 100100
