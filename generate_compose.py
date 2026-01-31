@@ -59,24 +59,17 @@ COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    # 1. IMAGEN MANUAL CORRECTA
-    image: ghcr.io/star-xai-protocol/capsbench:latest
+    image: {green_image}
     platform: linux/amd64
     container_name: green-agent
-    
-    # 2. COMANDO NORMAL
-    command: ["--host", "0.0.0.0", "--port", "{green_port}"]
-    
+    command: ["--host", "0.0.0.0", "--port", "{green_port}", "--card-url", "http://green-agent:{green_port}"]
     environment:{green_env}
-    
-    # 3. HEALTHCHECK QUE SÍ EXISTE
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
+      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/.well-known/agent-card.json"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
-      
+      timeout: 3s
+      retries: 10
+      start_period: 30s
     depends_on:{green_depends}
     networks:
       - agent-network
