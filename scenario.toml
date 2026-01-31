@@ -1,5 +1,5 @@
 [green_agent]
-# 👇 ESTA LÍNEA ES LA QUE FALTA. SIN ELLA, EL CLIENTE NO SABE DÓNDE IR.
+# 👇 ESTA LÍNEA ES LA QUE FALTA. SIN ELLA, EL CLIENTE NO SABE DÓNDE IR. 
 endpoint = "http://green-agent:9009"
 
 # Puedes dejar tu ID y la imagen.
