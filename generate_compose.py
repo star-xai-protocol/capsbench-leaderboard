@@ -62,7 +62,19 @@ services:
     image: {green_image}
     platform: linux/amd64
     container_name: green-agent
-    command: ["--host", "0.0.0.0", "--port", "{green_port}", "--card-url", "http://green-agent:{green_port}"]
+    
+    # 🚨 DEBUG RADICAL:
+    # 1. Imprimimos "HOLA" para ver si el contenedor funciona.
+    # 2. Listamos TODOS los archivos en /app para ver dónde está tu código.
+    # 3. Intentamos ejecutar Python forzando los logs (-u).
+    entrypoint: [
+      "sh", "-c",
+      "echo '🟢 ESTOY VIVO'; ls -R /app; echo '🚀 LANZANDO PYTHON...'; python -u src/green_agent.py || echo '❌ PYTHON FALLÓ'"
+    ]
+    
+    # Borramos el command para que no interfiera
+    command: []
+    
     environment:{green_env}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:{green_port}/.well-known/agent-card.json"]
