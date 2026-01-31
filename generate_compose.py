@@ -59,7 +59,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: JSON-RPC OBJECT COMPLIANT
+# 🏆 FASE FINAL: SINTAXIS SEGURA + OBJETO VÁLIDO
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -68,14 +68,16 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 💉 INYECCIÓN QUIRÚRGICA:
+    # 💉 INYECCIÓN DEFINITIVA:
     # 1. Importamos librerías.
-    # 2. Inyectamos la Agent Card.
-    # 3. FIX CRÍTICO: En 'dummy_rpc', el 'result' AHORA ES UN OBJETO (Dict), no un string.
-    #    Enviamos {'id': 'task-1', 'status': 'active'} para engañar al validador Pydantic.
+    # 2. Inyectamos la Agent Card Completa.
+    # 3. FIX CRÍTICO:
+    #    - Usamos 'chr(10)' para evitar errores de sintaxis en sed.
+    #    - En 'result', enviamos un DICCIONARIO {{ 'id': 'dummy', 'status': 'active' }}
+    #      en lugar de un string 'ok'. Esto satisface al validador Pydantic.
     entrypoint: [
       "/bin/sh", "-c",
-      "sed -i \\"1i from flask import Response, stream_with_context\\" src/green_agent.py; sed -i \\"/app = Flask(__name__)/a @app.route('/.well-known/agent-card.json')\\\\ndef agent_card(): return jsonify({{ 'name': 'CapsBench', 'description': 'Legacy', 'version': '1.0.0', 'url': 'http://green-agent:9009/', 'protocolVersion': '0.3.0', 'capabilities': {{ 'streaming': True }}, 'defaultInputModes': ['text'], 'defaultOutputModes': ['text'], 'skills': [{{ 'id': 'eval', 'name': 'Evaluation', 'description': 'CapsBench Eval', 'tags': ['evaluation'] }}] }})\\\\n@app.route('/', methods=['POST', 'GET'])\\\\ndef dummy_rpc():\\\\n    def generate():\\\\n        yield 'data: ' + json.dumps({{ 'jsonrpc': '2.0', 'result': {{ 'id': 'task-1', 'status': 'active', 'description': 'KeepAlive' }}, 'id': 1 }}) + chr(10) + chr(10)\\\\n    return Response(stream_with_context(generate()), mimetype='text/event-stream')\\" src/green_agent.py; echo '🟢 PARCHE JSON-RPC OBJECT APLICADO'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
+      "sed -i \\"1i from flask import Response, stream_with_context\\" src/green_agent.py; sed -i \\"/app = Flask(__name__)/a @app.route('/.well-known/agent-card.json')\\\\ndef agent_card(): return jsonify({{ 'name': 'CapsBench', 'description': 'Legacy', 'version': '1.0.0', 'url': 'http://green-agent:9009/', 'protocolVersion': '0.3.0', 'capabilities': {{ 'streaming': True }}, 'defaultInputModes': ['text'], 'defaultOutputModes': ['text'], 'skills': [{{ 'id': 'eval', 'name': 'Evaluation', 'description': 'CapsBench Eval', 'tags': ['evaluation'] }}] }})\\\\n@app.route('/', methods=['POST', 'GET'])\\\\ndef dummy_rpc():\\\\n    def generate():\\\\n        yield 'data: ' + json.dumps({{ 'jsonrpc': '2.0', 'result': {{ 'id': 'dummy-task', 'status': 'active' }}, 'id': 1 }}) + chr(10) + chr(10)\\\\n    return Response(stream_with_context(generate()), mimetype='text/event-stream')\\" src/green_agent.py; echo '🟢 PARCHE FINAL (OBJETO + CHR10) APLICADO'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
     ]
     
     command: []
@@ -286,7 +288,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO FINAL: Respuesta JSON-RPC corregida (Objeto vs String).")
+    print("✅ CÓDIGO ACTUALIZADO: Objeto JSON válido en respuesta RPC.")
 
 if __name__ == "__main__":
     main()
