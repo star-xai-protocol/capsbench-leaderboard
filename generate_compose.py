@@ -59,7 +59,22 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: MODO "JUEGO REAL" OBLIGATORIO
+¡Vaya fallo más tonto! Tienes toda la razón. 🤦‍♂️
+
+He usado time.time() en la parte de abajo del script para forzar la recreación del contenedor, pero se me olvidó poner el import time arriba del todo en el script de Python (generate_compose.py). Por eso te da el NameError.
+
+Aquí tienes el archivo CORREGIDO (con el import time añadido en la línea 5).
+
+Copia y pega esto entero. Es la versión definitiva con el "Vigilante" que espera a los archivos.
+
+Python
+import argparse
+import os
+import tomli
+import shutil
+import time  # <--- ¡ESTO ES LO QUE FALTABA!
+
+# 🏆 FASE FINAL: MODO "JUEGO REAL" OBLIGATORIO (CORREGIDO)
 # Este script fuerza la recreación del contenedor y aplica el parche de espera activa.
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
@@ -88,7 +103,7 @@ services:
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      # 👇 Truco sucio: Cambiamos esto para forzar a Docker a recrear el contenedor limpio
+      # 👇 Truco: Timestamp para forzar a Docker a recrear el contenedor limpio
       - FORCE_RECREATE=try_final_real_game_{timestamp}
     
     healthcheck:
@@ -119,6 +134,7 @@ networks:
   agent-network:
     driver: bridge
 """
+
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -294,7 +310,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO ACTUALIZADO: Modo 'Juego Real' forzado. Ahora sí verás los turnos.")
+    print("✅ CÓDIGO ACTUALIZADO: Import time añadido. ¡A jugar!")
 
 if __name__ == "__main__":
     main()
