@@ -60,28 +60,20 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: ARQUITECTURA LIMPIA (SIN PARCHES)
-# Usamos este script porque la imagen Docker ya contiene el código "Vigilante" correcto.
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
-    # Docker usará tu imagen local reconstruida
     image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
-    
-    # ✅ SIN PARCHES: Arrancamos normal.
-    # El código interno ya tiene el bucle 'while True' y 'glob' que añadiste.
+    # VOLVEMOS AL ORIGINAL QUE FUNCIONABA
     entrypoint: ["python", "-u", "src/green_agent.py", "--host", "0.0.0.0", "--port", "9009"]
-    
     command: []
     
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      # Forzamos recreación para asegurar que usa la imagen nueva
-      - FORCE_RECREATE=native_run_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -264,12 +256,15 @@ def main():
         for k, v in env_vars.items():
             env_block += f"\n      - {k}={v}"
 
+        # AQUÍ ESTÁ EL CAMBIO CLAVE:
+        # Añadimos 'sleep infinity' para que el contenedor NO SE CIERRE al terminar la partida.
+        # Así da tiempo a que se guarden y suban los archivos.
         participant_services += f"""
   {name}:
     image: ghcr.io/star-xai-protocol/capsbench-purple:latest
     platform: linux/amd64
     container_name: {name}
-    entrypoint: ["python", "-u", "purple_ai.py"]
+    entrypoint: ["/bin/sh", "-c", "python -u purple_ai.py; echo '✅ PARTIDA FINALIZADA. DURMIENDO...'; sleep infinity"]
     {env_block}
     depends_on:
       - green-agent
