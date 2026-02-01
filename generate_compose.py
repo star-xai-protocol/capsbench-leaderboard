@@ -61,10 +61,10 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# --- CÓDIGO VIGILANTE MEJORADO (SCHEMA FIX) ---
+# --- CÓDIGO DEL VIGILANTE (PROTOCOL FIX) ---
 VIGILANTE_CODE = r"""
 # ==========================================
-# PARCHE VIGILANTE: SCHEMA COMPLIANT
+# PARCHE VIGILANTE: SPLIT EVENTS
 # ==========================================
 import time
 import glob
@@ -92,22 +92,22 @@ def agent_card_patched():
         }]
     })
 
-# 2. RPC CON ESQUEMA CORRECTO (TaskStatusUpdateEvent)
+# 2. RPC ROBUSTO (Separa Artefacto de Estado)
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc_patched():
     def generate():
         print("👁️ VIGILANTE: Esperando resultados...", flush=True)
-        # IDs ficticios pero necesarios para el esquema
         ctx_id = "ctx-1"
         task_id = "task-1"
         
         while True:
+            # Busca resultados
             found = glob.glob('src/results/*.json') + glob.glob('results/*.json')
             
             if found:
                 file_path = found[0]
                 print(f"🏁 FIN DETECTADO: {file_path}", flush=True)
-                time.sleep(5)
+                time.sleep(2) 
                 
                 try:
                     with open(file_path, 'r') as f:
@@ -115,12 +115,28 @@ def dummy_rpc_patched():
                 except Exception:
                     file_content = "{}"
 
-                artifact = {
+                artifact_data = {
                     "name": os.path.basename(file_path),
                     "content": file_content
                 }
 
-                # MENSAJE FINAL (COMPLETED) CON TODOS LOS CAMPOS
+                # PASO 1: ENVIAR EL ARTEFACTO (Evento separado)
+                # Esto llena la lista 'artifacts' en el cliente
+                yield 'data: ' + json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": 1, 
+                    "result": {
+                        "contextId": ctx_id,
+                        "taskId": task_id,
+                        "final": False, 
+                        "artifact": artifact_data  # Campo singular
+                    }
+                }) + '\n\n'
+                
+                time.sleep(1) # Pequeña pausa para asegurar procesamiento
+
+                # PASO 2: ENVIAR FIN DE TAREA
+                # Ahora el cliente cierra y guarda lo recibido
                 yield 'data: ' + json.dumps({
                     "jsonrpc": "2.0",
                     "id": 1, 
@@ -128,19 +144,18 @@ def dummy_rpc_patched():
                         "contextId": ctx_id,
                         "taskId": task_id,
                         "final": True, 
-                        "status": {"state": "completed"},
-                        "artifacts": [artifact]
+                        "status": {"state": "completed"}
                     }
                 }) + '\n\n'
                 break
             
-            # MENSAJE HEARTBEAT (WORKING) CON TODOS LOS CAMPOS
+            # HEARTBEAT
             yield 'data: ' + json.dumps({
                 "jsonrpc": "2.0", 
                 "id": 1, 
                 "result": {
-                    "contextId": ctx_id,  # <--- FALTABA
-                    "taskId": task_id,    # <--- FALTABA
+                    "contextId": ctx_id,
+                    "taskId": task_id,
                     "final": False, 
                     "status": {"state": "working"}
                 }
@@ -149,9 +164,8 @@ def dummy_rpc_patched():
             
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
-# 3. ARRANQUE
 if __name__ == "__main__":
-    print("🟢 SERVIDOR (SCHEMA FIX) INICIANDO...", flush=True)
+    print("🟢 SERVIDOR VIGILANTE (SPLIT) INICIANDO...", flush=True)
     app.run(host="0.0.0.0", port=9009)
 """
 
