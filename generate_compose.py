@@ -152,7 +152,8 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 🛡️ ESTRATEGIA: INYECCIÓN DE CÓDIGO QUE ENVÍA DATOS
+    # 🛡️ ESTRATEGIA: INYECCIÓN SEGURA (FLATTENED)
+    # Usamos printf para escribir el código python formateado correctamente.
     entrypoint:
       - /bin/sh
       - -c
@@ -165,8 +166,8 @@ services:
         # Quitar el app.run original
         python -c "lines = [l for l in open('src/green_agent.py') if 'app.run' not in l]; open('src/green_agent.py','w').writelines(lines)"
         
-        # Añadir el código nuevo (que lee y envía el archivo)
-        echo "{vigilante_payload}" >> src/green_agent.py
+        # Añadir el código nuevo (usando printf para interpretar los saltos de línea)
+        printf "{vigilante_payload}" >> src/green_agent.py
         
         echo '🚀 ARRANCANDO...'
         python -u src/green_agent.py
@@ -384,7 +385,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO LIMPIO: Usando imagen nativa con Vigilante integrado.")
+    print("✅ CÓDIGO ACTUALIZADO: Sintaxis YAML arreglada (Flattened Payload).")
 
 if __name__ == "__main__":
     main()
