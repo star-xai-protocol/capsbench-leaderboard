@@ -60,7 +60,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: MODO "RENAME & APPEND" (SINTAXIS SEGURA)
+# 🏆 FASE FINAL: CORRECCIÓN DE LLAVES (ESCAPING FIX)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -69,14 +69,12 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 💉 INYECCIÓN INTELIGENTE:
-    # 1. RENAME: Usamos sed solo para cambiar la URL de las rutas viejas (ej: '/' -> '/old').
-    #    Esto libera la ruta '/' para nosotros sin romper el código original ni la indentación.
-    # 2. APPEND: Usamos python para escribir el código nuevo AL FINAL del archivo.
-    #    Esto garantiza que la sintaxis y los espacios sean perfectos.
+    # 💉 INYECCIÓN CON DOBLE LLAVE (FIXED):
+    # Hemos duplicado las llaves {{{{...}}}} en el código python inyectado
+    # para que la función .format() de este script no se confunda.
     entrypoint: [
       "/bin/sh", "-c",
-      "echo '🔧 LIBERANDO RUTAS...'; sed -i \"s|@app.route('/',|@app.route('/old_root',|g\" src/green_agent.py; sed -i \"s|@app.route('/.well-known/agent-card.json'|@app.route('/.well-known/old-card.json'|g\" src/green_agent.py; echo '📝 ESCRIBIENDO PARCHE SEGURO...'; python -c \"with open('src/green_agent.py', 'a') as f: f.write('\\n# --- PARCHE VIGILANTE ---\\nimport time\\nimport glob\\nimport json\\nimport os\\nfrom flask import Response, stream_with_context, jsonify\\n\\n@app.route(\\'/.well-known/agent-card.json\\')\\ndef agent_card_new():\\n    return jsonify({\\'name\\': \\'Green\\', \\'version\\': \\'1.0\\', \\'skills\\': []})\\n\\n@app.route(\\'/\\', methods=[\\'POST\\', \\'GET\\'])\\ndef dummy_rpc_new():\\n    def generate():\\n        print(\\'👁️ VIGILANTE: START\\', flush=True)\\n        while True:\\n            # Buscamos en ambas carpetas por seguridad\\n            res = glob.glob(\\'src/results/*.json\\') + glob.glob(\\'results/*.json\\')\\n            if res:\\n                print(f\\'🏁 FIN DETECTADO: {res[0]}\\', flush=True)\\n                time.sleep(5)\\n                yield \\'data: \\' + json.dumps({\\'jsonrpc\\': \\'2.0\\', \\'result\\': {\\'final\\': True, \\'status\\': {\\'state\\': \\'completed\\'}}, \\'id\\': 1}) + \\'\\\\n\\\\n\\'\\n                break\\n            yield \\'data: \\' + json.dumps({\\'jsonrpc\\': \\'2.0\\', \\'result\\': {\\'final\\': False, \\'status\\': {\\'state\\': \\'working\\'}}, \\'id\\': 1}) + \\'\\\\n\\\\n\\'\\n            time.sleep(2)\\n    return Response(stream_with_context(generate()), mimetype=\\'text/event-stream\\')\\n')\"; echo '🟢 PARCHE APLICADO SIN ERRORES'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
+      "echo '🔧 LIBERANDO RUTAS...'; sed -i \"s|@app.route('/',|@app.route('/old_root',|g\" src/green_agent.py; sed -i \"s|@app.route('/.well-known/agent-card.json'|@app.route('/.well-known/old-card.json'|g\" src/green_agent.py; echo '📝 ESCRIBIENDO PARCHE SEGURO...'; python -c \"with open('src/green_agent.py', 'a') as f: f.write('\\n# --- PARCHE VIGILANTE ---\\nimport time\\nimport glob\\nimport json\\nimport os\\nfrom flask import Response, stream_with_context, jsonify\\n\\n@app.route(\\'/.well-known/agent-card.json\\')\\ndef agent_card_new():\\n    return jsonify({{\\'name\\': \\'Green\\', \\'version\\': \\'1.0\\', \\'skills\\': []}})\\n\\n@app.route(\\'/\\', methods=[\\'POST\\', \\'GET\\'])\\ndef dummy_rpc_new():\\n    def generate():\\n        print(\\'👁️ VIGILANTE: START\\', flush=True)\\n        while True:\\n            res = glob.glob(\\'src/results/*.json\\') + glob.glob(\\'results/*.json\\')\\n            if res:\\n                print(f\\'🏁 FIN DETECTADO: {{res[0]}}\\' , flush=True)\\n                time.sleep(5)\\n                yield \\'data: \\' + json.dumps({{\\'jsonrpc\\': \\'2.0\\', \\'result\\': {{\\'final\\': True, \\'status\\': {{\\'state\\': \\'completed\\'}}}}, \\'id\\': 1}}) + \\'\\\\n\\\\n\\'\\n                break\\n            yield \\'data: \\' + json.dumps({{\\'jsonrpc\\': \\'2.0\\', \\'result\\': {{\\'final\\': False, \\'status\\': {{\\'state\\': \\'working\\'}}}}, \\'id\\': 1}}) + \\'\\\\n\\\\n\\'\\n            time.sleep(2)\\n    return Response(stream_with_context(generate()), mimetype=\\'text/event-stream\\')\\n')\"; echo '🟢 PARCHE APLICADO CORRECTAMENTE'; python -u src/green_agent.py --host 0.0.0.0 --port 9009"
     ]
     
     command: []
@@ -84,8 +82,7 @@ services:
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      # 👇 Nuevo nombre para forzar recreación limpia
-      - FORCE_RECREATE=syntax_fix_{timestamp}
+      - FORCE_RECREATE=format_fix_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -268,13 +265,12 @@ def main():
         for k, v in env_vars.items():
             env_block += f"\n      - {k}={v}"
 
-        # 👇 MANTENEMOS EL "SLEEP INFINITY" PORQUE FUNCIONÓ DE MARAVILLA
+        # MANTENEMOS EL SLEEP INFINITY (CRUCIAL)
         participant_services += f"""
   {name}:
     image: ghcr.io/star-xai-protocol/capsbench-purple:latest
     platform: linux/amd64
     container_name: {name}
-    # 💤 Ejecuta y duerme para salvar la partida
     entrypoint: ["/bin/sh", "-c", "python -u purple_ai.py; echo '✅ AGENTE TERMINÓ. DURMIENDO...'; sleep infinity"]
     {env_block}
     depends_on:
@@ -292,7 +288,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO ACTUALIZADO: Estrategia Rename+Append (Sin errores de indentación).")
+    print("✅ CÓDIGO ACTUALIZADO: Llaves corregidas {{...}}. Ahora sí compilará.")
 
 if __name__ == "__main__":
     main()
