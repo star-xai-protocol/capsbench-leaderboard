@@ -60,7 +60,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: INYECCIÓN QUIRÚRGICA (SOLUCIÓN AL 404)
+# 🏆 FASE FINAL: INSERCIÓN PRE-MAIN + SLEEP INFINITY (LA BUENA)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -69,47 +69,48 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 🛡️ ESTRATEGIA: INSERTAR EN EL LUGAR EXACTO
-    # 1. Renombramos las rutas viejas (sed).
-    # 2. Usamos Python para leer el archivo, buscar "app = Flask",
-    #    e insertar el código nuevo INMEDIATAMENTE DESPUÉS.
-    #    Así garantizamos que Flask registre las rutas antes de hacer app.run().
+    # 🛡️ ESTRATEGIA:
+    # 1. Renombramos las rutas viejas para evitar conflictos.
+    # 2. Usamos Python para insertar el código NUEVO justo antes del bloque final 
+    #    ("if __name__ == '__main__':") para asegurar que se cargue antes de arrancar.
     entrypoint:
       - /bin/sh
       - -c
       - |
-        echo '🔧 PREPARANDO INYECCIÓN...'
-        # 1. Apartar lo viejo
+        echo '🔧 PREPARANDO ARCHIVOS...'
+        # 1. Apartar rutas viejas (evita error de duplicados de Flask)
         sed -i "s|@app.route('/',|@app.route('/old_root',|g" src/green_agent.py
         sed -i "s|@app.route('/.well-known/agent-card.json'|@app.route('/.well-known/old-card.json'|g" src/green_agent.py
         
-        # 2. Inyectar lo nuevo en la cabecera (Python Patcher)
+        # 2. Inyectar Vigilante (Antes del main)
         python -c "
         import sys
         lines = open('src/green_agent.py').readlines()
         
-        # Buscamos dónde insertar (Justo después de definir 'app')
-        idx = 0
+        # Buscamos dónde empieza el bloque main para escribir ANTES
+        idx = len(lines)
         for i, line in enumerate(lines):
-            if 'app = Flask' in line:
-                idx = i + 1
+            if 'if __name__' in line:
+                idx = i
                 break
         
-        # El Código Vigilante (Compacto y sin indentación compleja)
+        # El Código Vigilante (Sin indentación compleja para evitar errores)
         code = [
           '\\n# --- PARCHE VIGILANTE ---\\n',
           'import time, glob, json, os\\n',
           'from flask import Response, stream_with_context, jsonify\\n',
+          '# Nueva ruta Agent Card\\n',
           '@app.route(\"/.well-known/agent-card.json\")\\n',
-          'def ac_new(): return jsonify({\"name\":\"Green\",\"version\":\"1\",\"skills\":[]})\\n',
+          'def ac_new(): return jsonify({{\"name\":\"Green\",\"version\":\"1\",\"skills\":[]}})\\n',
+          '# Nueva ruta RPC con Vigilante\\n',
           '@app.route(\"/\", methods=[\"POST\",\"GET\"])\\n',
           'def drpc_new():\\n',
           ' def g():\\n',
           '  print(\"👁️ VIGILANTE ON\", flush=True)\\n',
           '  while True:\\n',
           '   f=glob.glob(\"src/results/*.json\")+glob.glob(\"results/*.json\")\\n',
-          '   if f: print(f\"🏁 DONE: {f[0]}\", flush=True); time.sleep(5); yield \"data: \" + json.dumps({\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"final\":True,\"status\":{\"state\":\"completed\"}}}) + \"\\n\\n\"; break\\n',
-          '   yield \"data: \" + json.dumps({\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"final\":False,\"status\":{\"state\":\"working\"}}}) + \"\\n\\n\"\\n',
+          '   if f: print(f\"🏁 DONE: {{f[0]}}\", flush=True); time.sleep(5); yield \"data: \" + json.dumps({{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"final\":True,\"status\":{{\"state\":\"completed\"}}}}}}) + \"\\n\\n\"; break\\n',
+          '   yield \"data: \" + json.dumps({{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"final\":False,\"status\":{{\"state\":\"working\"}}}}}}) + \"\\n\\n\"\\n',
           '   time.sleep(2)\\n',
           ' return Response(stream_with_context(g()), mimetype=\"text/event-stream\")\\n'
         ]
@@ -128,7 +129,8 @@ services:
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      - FORCE_RECREATE=inject_fix_{timestamp}
+      # Forzamos recreación limpia
+      - FORCE_RECREATE=premain_fix_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -310,7 +312,7 @@ def main():
         for k, v in env_vars.items():
             env_block += f"\n      - {k}={v}"
 
-        # 💤 MANTENEMOS EL SLEEP INFINITY (CRUCIAL)
+        # 💤 EL TRUCO FINAL: Sleep Infinity para que no mate el proceso al acabar
         participant_services += f"""
   {name}:
     image: ghcr.io/star-xai-protocol/capsbench-purple:latest
@@ -330,7 +332,7 @@ def main():
       - agent-network
 """
 
-    # Usamos dobles llaves {{}} para escapar en .format()
+    # Usamos dobles llaves {{}} para que .format() funcione
     final_compose = COMPOSE_TEMPLATE.format(
         participant_services=participant_services,
         timestamp=int(time.time())
@@ -340,7 +342,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO LISTO: Inyección quirúrgica activada (Fix 404).")
+    print("✅ CÓDIGO LISTO: Inyección Pre-Main + Sleep Infinity.")
 
 if __name__ == "__main__":
     main()
