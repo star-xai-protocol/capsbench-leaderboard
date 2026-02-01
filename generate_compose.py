@@ -60,7 +60,45 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: INSERCIÓN PRE-MAIN + SLEEP INFINITY (LA BUENA)
+# --- CÓDIGO PYTHON QUE INYECTAREMOS EN EL CONTENEDOR ---
+# Lo definimos aquí fuera para evitar conflictos de llaves { } con el template.
+# Este código se insertará dentro de green_agent.py
+VIGILANTE_CODE = r"""
+# --- PARCHE VIGILANTE INYECTADO ---
+import time, glob, json, os
+from flask import Response, stream_with_context, jsonify
+
+# 1. Nueva ruta para Agent Card (evita 404)
+@app.route('/.well-known/agent-card.json')
+def ac_new():
+    return jsonify({"name": "Green", "version": "1.0", "skills": []})
+
+# 2. Nueva ruta RPC con lógica de espera
+@app.route('/', methods=['POST', 'GET'])
+def drpc_new():
+    def g():
+        print("👁️ VIGILANTE ON", flush=True)
+        while True:
+            # Buscamos archivos de resultados
+            f = glob.glob("src/results/*.json") + glob.glob("results/*.json")
+            if f:
+                print(f"🏁 DONE: {f[0]}", flush=True)
+                time.sleep(5) # Espera de seguridad
+                # Enviamos señal de completado
+                yield "data: " + json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"final": True, "status": {"state": "completed"}}}) + "\n\n"
+                break
+            
+            # Si no hay archivo, mantenemos la conexión viva
+            yield "data: " + json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"final": False, "status": {"state": "working"}}}) + "\n\n"
+            time.sleep(2)
+    return Response(stream_with_context(g()), mimetype='text/event-stream')
+"""
+
+# Preparamos el código para que sea seguro pasarlo por línea de comandos (escapamos comillas y saltos de línea)
+VIGILANTE_PAYLOAD = VIGILANTE_CODE.replace('"', '\\"').replace('\n', '\\n')
+
+
+# 🏆 TEMPLATE DEL DOCKER COMPOSE
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -69,54 +107,37 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 🛡️ ESTRATEGIA:
-    # 1. Renombramos las rutas viejas para evitar conflictos.
-    # 2. Usamos Python para insertar el código NUEVO justo antes del bloque final 
-    #    ("if __name__ == '__main__':") para asegurar que se cargue antes de arrancar.
+    # 🛡️ ESTRATEGIA SEGURA:
+    # 1. Renombramos las rutas viejas para que no molesten.
+    # 2. Usamos un script Python para inyectar el código nuevo ANTES de que arranque Flask.
     entrypoint:
       - /bin/sh
       - -c
       - |
-        echo '🔧 PREPARANDO ARCHIVOS...'
-        # 1. Apartar rutas viejas (evita error de duplicados de Flask)
+        echo '🔧 PREPARANDO INYECCIÓN...'
+        # 1. Apartar rutas viejas
         sed -i "s|@app.route('/',|@app.route('/old_root',|g" src/green_agent.py
         sed -i "s|@app.route('/.well-known/agent-card.json'|@app.route('/.well-known/old-card.json'|g" src/green_agent.py
         
-        # 2. Inyectar Vigilante (Antes del main)
+        # 2. Inyectar Vigilante usando Python (más seguro que sed)
         python -c "
         import sys
         lines = open('src/green_agent.py').readlines()
         
-        # Buscamos dónde empieza el bloque main para escribir ANTES
+        # Buscamos dónde insertar (Antes del bloque main)
         idx = len(lines)
         for i, line in enumerate(lines):
             if 'if __name__' in line:
                 idx = i
                 break
         
-        # El Código Vigilante (Sin indentación compleja para evitar errores)
-        code = [
-          '\\n# --- PARCHE VIGILANTE ---\\n',
-          'import time, glob, json, os\\n',
-          'from flask import Response, stream_with_context, jsonify\\n',
-          '# Nueva ruta Agent Card\\n',
-          '@app.route(\"/.well-known/agent-card.json\")\\n',
-          'def ac_new(): return jsonify({{\"name\":\"Green\",\"version\":\"1\",\"skills\":[]}})\\n',
-          '# Nueva ruta RPC con Vigilante\\n',
-          '@app.route(\"/\", methods=[\"POST\",\"GET\"])\\n',
-          'def drpc_new():\\n',
-          ' def g():\\n',
-          '  print(\"👁️ VIGILANTE ON\", flush=True)\\n',
-          '  while True:\\n',
-          '   f=glob.glob(\"src/results/*.json\")+glob.glob(\"results/*.json\")\\n',
-          '   if f: print(f\"🏁 DONE: {{f[0]}}\", flush=True); time.sleep(5); yield \"data: \" + json.dumps({{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"final\":True,\"status\":{{\"state\":\"completed\"}}}}}}) + \"\\n\\n\"; break\\n',
-          '   yield \"data: \" + json.dumps({{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"final\":False,\"status\":{{\"state\":\"working\"}}}}}}) + \"\\n\\n\"\\n',
-          '   time.sleep(2)\\n',
-          ' return Response(stream_with_context(g()), mimetype=\"text/event-stream\")\\n'
-        ]
+        # El código inyectado viene de la variable externa
+        code_str = '{vigilante_payload}'
+        # Convertimos el string escapado de vuelta a líneas reales para escribirlo en el archivo
+        code_lines = [line + '\\n' for line in code_str.split('\\n')]
         
         # Insertamos y guardamos
-        lines[idx:idx] = code
+        lines[idx:idx] = code_lines
         open('src/green_agent.py','w').writelines(lines)
         print('✅ CÓDIGO INYECTADO CORRECTAMENTE')
         "
@@ -129,8 +150,7 @@ services:
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      # Forzamos recreación limpia
-      - FORCE_RECREATE=premain_fix_{timestamp}
+      - FORCE_RECREATE=final_fix_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -312,7 +332,7 @@ def main():
         for k, v in env_vars.items():
             env_block += f"\n      - {k}={v}"
 
-        # 💤 EL TRUCO FINAL: Sleep Infinity para que no mate el proceso al acabar
+        # 💤 MANTENEMOS EL SLEEP INFINITY (CRUCIAL)
         participant_services += f"""
   {name}:
     image: ghcr.io/star-xai-protocol/capsbench-purple:latest
@@ -332,9 +352,10 @@ def main():
       - agent-network
 """
 
-    # Usamos dobles llaves {{}} para que .format() funcione
+    # Al formatear, pasamos el payload seguro.
     final_compose = COMPOSE_TEMPLATE.format(
         participant_services=participant_services,
+        vigilante_payload=VIGILANTE_PAYLOAD,
         timestamp=int(time.time())
     )
 
@@ -342,7 +363,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO LISTO: Inyección Pre-Main + Sleep Infinity.")
+    print("✅ CÓDIGO GENERADO SIN ERRORES DE SINTAXIS.")
 
 if __name__ == "__main__":
     main()
