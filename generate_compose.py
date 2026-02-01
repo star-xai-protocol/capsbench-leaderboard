@@ -61,10 +61,10 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# --- CÓDIGO VIGILANTE MEJORADO (LEE Y ENVÍA) ---
+# --- CÓDIGO VIGILANTE MEJORADO (AGENT CARD COMPLETA + LECTURA) ---
 VIGILANTE_CODE = r"""
 # ==========================================
-# PARCHE VIGILANTE: LEER Y ENVIAR
+# PARCHE VIGILANTE: AGENT CARD COMPLETA
 # ==========================================
 import time
 import glob
@@ -72,14 +72,24 @@ import json
 import os
 from flask import Response, stream_with_context, jsonify
 
-# 1. EVITAR ERROR 404
+# 1. AGENT CARD COMPLETA (Para calmar a Pydantic)
 @app.route('/.well-known/agent-card.json')
 def agent_card_patched():
     return jsonify({
         "name": "Green Agent Patched",
         "version": "1.0.0",
+        "description": "Patched for Leaderboard",  
+        "url": "http://green-agent:9009/",         
+        "protocolVersion": "0.3.0",                
+        "defaultInputModes": ["text"],             
+        "defaultOutputModes": ["text"],            
         "capabilities": {"streaming": True},
-        "skills": [{"id": "eval", "name": "Eval"}]
+        "skills": [{
+            "id": "capsbench_eval", 
+            "name": "CapsBench Evaluation",
+            "description": "Evaluation skill",     
+            "tags": ["evaluation"]                 
+        }]
     })
 
 # 2. RPC CON ENVÍO DE DATOS REALES
@@ -137,7 +147,7 @@ def dummy_rpc_patched():
 
 # 3. ARRANQUE
 if __name__ == "__main__":
-    print("🟢 SERVIDOR (CON DATOS) INICIANDO...", flush=True)
+    print("🟢 SERVIDOR (CON CARD COMPLETA) INICIANDO...", flush=True)
     app.run(host="0.0.0.0", port=9009)
 """
 
