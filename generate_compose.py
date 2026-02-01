@@ -60,7 +60,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🏆 FASE FINAL: FORMATO YAML SEGURO (BLOQUE) + VIGILANTE
+# 🏆 FASE FINAL: INYECCIÓN QUIRÚRGICA (SOLUCIÓN AL 404)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -69,22 +69,58 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 🛡️ USAMOS FORMATO BLOQUE DE YAML (|)
-    # Esto evita el error 'found character that cannot start any token'.
-    # Docker leerá todo el script sin quejarse por las comillas internas.
+    # 🛡️ ESTRATEGIA: INSERTAR EN EL LUGAR EXACTO
+    # 1. Renombramos las rutas viejas (sed).
+    # 2. Usamos Python para leer el archivo, buscar "app = Flask",
+    #    e insertar el código nuevo INMEDIATAMENTE DESPUÉS.
+    #    Así garantizamos que Flask registre las rutas antes de hacer app.run().
     entrypoint:
       - /bin/sh
       - -c
       - |
-        echo '🔧 PREPARANDO ENTORNO...'
-        # 1. Renombrar rutas viejas para evitar conflictos
+        echo '🔧 PREPARANDO INYECCIÓN...'
+        # 1. Apartar lo viejo
         sed -i "s|@app.route('/',|@app.route('/old_root',|g" src/green_agent.py
         sed -i "s|@app.route('/.well-known/agent-card.json'|@app.route('/.well-known/old-card.json'|g" src/green_agent.py
         
-        # 2. Inyectar el Vigilante (Python puro, sin errores de indentación)
-        python -c "import sys; open('src/green_agent.py', 'a').write('\\n# --- PARCHE VIGILANTE ---\\nimport time, glob, json, os\\nfrom flask import Response, stream_with_context, jsonify\\n\\n@app.route(\\'/.well-known/agent-card.json\\')\\ndef agent_card_new(): return jsonify({{'name': 'Green', 'version': '1.0', 'skills': []}})\\n\\n@app.route(\\'/\\', methods=[\\'POST\\', \\'GET\\'])\\ndef dummy_rpc_new():\\n def gen():\\n  print(\\'👁️ VIGILANTE: START\\', flush=True)\\n  while True:\\n   # Buscamos en ambas rutas por seguridad\\n   f=glob.glob(\\'src/results/*.json\\')+glob.glob(\\'results/*.json\\')\\n   if f:\\n    print(f\\'🏁 DONE: {{f[0]}}\\', flush=True); time.sleep(5)\\n    # Enviamos COMPLETED para que el cliente guarde y salga\\n    yield \\'data: \\' + json.dumps({{'jsonrpc':'2.0','id':1,'result':{{'final':True,'status':{{'state':'completed'}}}}}}) + \\'\\\\n\\\\n\\'\\n    break\\n   # Si no hay archivo, seguimos WORKING\\n   yield \\'data: \\' + json.dumps({{'jsonrpc':'2.0','id':1,'result':{{'final':False,'status':{{'state':'working'}}}}}}) + \\'\\\\n\\\\n\\'\\n   time.sleep(2)\\n return Response(stream_with_context(gen()), mimetype=\\'text/event-stream\\')\\n')"
+        # 2. Inyectar lo nuevo en la cabecera (Python Patcher)
+        python -c "
+        import sys
+        lines = open('src/green_agent.py').readlines()
         
-        echo '🟢 PARCHE APLICADO. INICIANDO SERVIDOR...'
+        # Buscamos dónde insertar (Justo después de definir 'app')
+        idx = 0
+        for i, line in enumerate(lines):
+            if 'app = Flask' in line:
+                idx = i + 1
+                break
+        
+        # El Código Vigilante (Compacto y sin indentación compleja)
+        code = [
+          '\\n# --- PARCHE VIGILANTE ---\\n',
+          'import time, glob, json, os\\n',
+          'from flask import Response, stream_with_context, jsonify\\n',
+          '@app.route(\"/.well-known/agent-card.json\")\\n',
+          'def ac_new(): return jsonify({\"name\":\"Green\",\"version\":\"1\",\"skills\":[]})\\n',
+          '@app.route(\"/\", methods=[\"POST\",\"GET\"])\\n',
+          'def drpc_new():\\n',
+          ' def g():\\n',
+          '  print(\"👁️ VIGILANTE ON\", flush=True)\\n',
+          '  while True:\\n',
+          '   f=glob.glob(\"src/results/*.json\")+glob.glob(\"results/*.json\")\\n',
+          '   if f: print(f\"🏁 DONE: {f[0]}\", flush=True); time.sleep(5); yield \"data: \" + json.dumps({\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"final\":True,\"status\":{\"state\":\"completed\"}}}) + \"\\n\\n\"; break\\n',
+          '   yield \"data: \" + json.dumps({\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"final\":False,\"status\":{\"state\":\"working\"}}}) + \"\\n\\n\"\\n',
+          '   time.sleep(2)\\n',
+          ' return Response(stream_with_context(g()), mimetype=\"text/event-stream\")\\n'
+        ]
+        
+        # Insertamos y guardamos
+        lines[idx:idx] = code
+        open('src/green_agent.py','w').writelines(lines)
+        print('✅ CÓDIGO INYECTADO CORRECTAMENTE')
+        "
+        
+        echo '🚀 ARRANCANDO SERVIDOR...'
         python -u src/green_agent.py --host 0.0.0.0 --port 9009
     
     command: []
@@ -92,8 +128,7 @@ services:
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      # Forzamos recreación para limpiar basura anterior
-      - FORCE_RECREATE=yaml_fix_{timestamp}
+      - FORCE_RECREATE=inject_fix_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -275,8 +310,7 @@ def main():
         for k, v in env_vars.items():
             env_block += f"\n      - {k}={v}"
 
-        # 💤 MANTENEMOS EL SLEEP INFINITY (CRUCIAL PARA QUE GUARDE)
-        # Usamos también formato bloque aquí por seguridad
+        # 💤 MANTENEMOS EL SLEEP INFINITY (CRUCIAL)
         participant_services += f"""
   {name}:
     image: ghcr.io/star-xai-protocol/capsbench-purple:latest
@@ -287,7 +321,7 @@ def main():
       - -c
       - |
         python -u purple_ai.py
-        echo '✅ AGENTE TERMINÓ. DURMIENDO PARA ASEGURAR SUBIDA...'
+        echo '✅ AGENTE TERMINÓ. DURMIENDO...'
         sleep infinity
     {env_block}
     depends_on:
@@ -296,7 +330,7 @@ def main():
       - agent-network
 """
 
-    # Usamos las dobles llaves {{ }} dentro del template para que el .format() no falle
+    # Usamos dobles llaves {{}} para escapar en .format()
     final_compose = COMPOSE_TEMPLATE.format(
         participant_services=participant_services,
         timestamp=int(time.time())
@@ -306,8 +340,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO ACTUALIZADO: Formato YAML Bloque (Indestructible).")
+    print("✅ CÓDIGO LISTO: Inyección quirúrgica activada (Fix 404).")
 
 if __name__ == "__main__":
     main()
-
