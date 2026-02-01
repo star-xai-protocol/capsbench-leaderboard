@@ -66,4 +66,4 @@ git commit -m "Setup leaderboard"
 git push
 ```
 
-Congratulations - your leaderboard is now ready to accept submissions! 
+Congratulations - your leaderboard is now ready to accept submissions!  
