@@ -61,10 +61,10 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# --- CÓDIGO VIGILANTE MEJORADO (AGENT CARD COMPLETA + LECTURA) ---
+# --- CÓDIGO VIGILANTE MEJORADO (SCHEMA FIX) ---
 VIGILANTE_CODE = r"""
 # ==========================================
-# PARCHE VIGILANTE: AGENT CARD COMPLETA
+# PARCHE VIGILANTE: SCHEMA COMPLIANT
 # ==========================================
 import time
 import glob
@@ -72,59 +72,61 @@ import json
 import os
 from flask import Response, stream_with_context, jsonify
 
-# 1. AGENT CARD COMPLETA (Para calmar a Pydantic)
+# 1. AGENT CARD COMPLETA
 @app.route('/.well-known/agent-card.json')
 def agent_card_patched():
     return jsonify({
         "name": "Green Agent Patched",
         "version": "1.0.0",
-        "description": "Patched for Leaderboard",  
-        "url": "http://green-agent:9009/",         
-        "protocolVersion": "0.3.0",                
-        "defaultInputModes": ["text"],             
-        "defaultOutputModes": ["text"],            
+        "description": "Patched for Leaderboard",
+        "url": "http://green-agent:9009/",
+        "protocolVersion": "0.3.0",
+        "defaultInputModes": ["text"],
+        "defaultOutputModes": ["text"],
         "capabilities": {"streaming": True},
         "skills": [{
             "id": "capsbench_eval", 
             "name": "CapsBench Evaluation",
-            "description": "Evaluation skill",     
-            "tags": ["evaluation"]                 
+            "description": "Evaluation skill",
+            "tags": ["evaluation"]
         }]
     })
 
-# 2. RPC CON ENVÍO DE DATOS REALES
+# 2. RPC CON ESQUEMA CORRECTO (TaskStatusUpdateEvent)
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc_patched():
     def generate():
         print("👁️ VIGILANTE: Esperando resultados...", flush=True)
+        # IDs ficticios pero necesarios para el esquema
+        ctx_id = "ctx-1"
+        task_id = "task-1"
+        
         while True:
-            # Buscamos el archivo de resultados
             found = glob.glob('src/results/*.json') + glob.glob('results/*.json')
             
             if found:
                 file_path = found[0]
                 print(f"🏁 FIN DETECTADO: {file_path}", flush=True)
-                time.sleep(5) # Espera técnica para asegurar escritura
+                time.sleep(5)
                 
-                # --- LEEMOS EL ARCHIVO PARA ENVIARLO ---
                 try:
                     with open(file_path, 'r') as f:
                         file_content = f.read()
-                except Exception as e:
+                except Exception:
                     file_content = "{}"
-                    print(f"Error leyendo archivo: {e}", flush=True)
 
-                # Construimos el artefacto
                 artifact = {
                     "name": os.path.basename(file_path),
                     "content": file_content
                 }
 
-                # Enviamos 'completed' CON EL ARCHIVO DENTRO
+                # MENSAJE FINAL (COMPLETED) CON TODOS LOS CAMPOS
                 yield 'data: ' + json.dumps({
                     "jsonrpc": "2.0",
                     "id": 1, 
                     "result": {
+                        "contextId": ctx_id,
+                        "taskId": task_id,
                         "final": True, 
                         "status": {"state": "completed"},
                         "artifacts": [artifact]
@@ -132,11 +134,13 @@ def dummy_rpc_patched():
                 }) + '\n\n'
                 break
             
-            # Si no ha terminado, enviamos heartbeat
+            # MENSAJE HEARTBEAT (WORKING) CON TODOS LOS CAMPOS
             yield 'data: ' + json.dumps({
                 "jsonrpc": "2.0", 
                 "id": 1, 
                 "result": {
+                    "contextId": ctx_id,  # <--- FALTABA
+                    "taskId": task_id,    # <--- FALTABA
                     "final": False, 
                     "status": {"state": "working"}
                 }
@@ -147,7 +151,7 @@ def dummy_rpc_patched():
 
 # 3. ARRANQUE
 if __name__ == "__main__":
-    print("🟢 SERVIDOR (CON CARD COMPLETA) INICIANDO...", flush=True)
+    print("🟢 SERVIDOR (SCHEMA FIX) INICIANDO...", flush=True)
     app.run(host="0.0.0.0", port=9009)
 """
 
