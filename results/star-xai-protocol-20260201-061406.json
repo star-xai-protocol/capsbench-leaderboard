@@ -1,0 +1,29 @@
+{
+  "participants": {},
+  "results": [
+    {
+      "benchmark_version": "CapsBench-v1.0",
+      "timestamp": "2026-02-01T06:13:41Z",
+      "participants": {
+        "agent_id": "Purple-Agent-gemini-2.5-pro",
+        "green_agent": "capsbench-logic-v1"
+      },
+      "results": [
+        {
+          "level_played": "1",
+          "success": false,
+          "outcome": "TIMEOUT",
+          "efficiency_score": 43,
+          "moves_used": 22,
+          "ideal_moves": 12,
+          "max_moves": 22,
+          "mice_rescued_percentage": 66.66666666666666,
+          "token_usage": {
+            "total": 282841
+          },
+          "replay_file": "replays/replay_L1_Purple-Agent-gemini-2.5-pro_20260201_055254.jsonl"
+        }
+      ]
+    }
+  ]
+}
