@@ -60,97 +60,28 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# --- CÓDIGO PYTHON QUE INYECTAREMOS EN EL CONTENEDOR ---
-# Lo definimos aquí fuera para evitar conflictos de llaves { } con el template.
-# Este código se insertará dentro de green_agent.py
-VIGILANTE_CODE = r"""
-# --- PARCHE VIGILANTE INYECTADO ---
-import time, glob, json, os
-from flask import Response, stream_with_context, jsonify
-
-# 1. Nueva ruta para Agent Card (evita 404)
-@app.route('/.well-known/agent-card.json')
-def ac_new():
-    return jsonify({"name": "Green", "version": "1.0", "skills": []})
-
-# 2. Nueva ruta RPC con lógica de espera
-@app.route('/', methods=['POST', 'GET'])
-def drpc_new():
-    def g():
-        print("👁️ VIGILANTE ON", flush=True)
-        while True:
-            # Buscamos archivos de resultados
-            f = glob.glob("src/results/*.json") + glob.glob("results/*.json")
-            if f:
-                print(f"🏁 DONE: {f[0]}", flush=True)
-                time.sleep(5) # Espera de seguridad
-                # Enviamos señal de completado
-                yield "data: " + json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"final": True, "status": {"state": "completed"}}}) + "\n\n"
-                break
-            
-            # Si no hay archivo, mantenemos la conexión viva
-            yield "data: " + json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"final": False, "status": {"state": "working"}}}) + "\n\n"
-            time.sleep(2)
-    return Response(stream_with_context(g()), mimetype='text/event-stream')
-"""
-
-# Preparamos el código para que sea seguro pasarlo por línea de comandos (escapamos comillas y saltos de línea)
-VIGILANTE_PAYLOAD = VIGILANTE_CODE.replace('"', '\\"').replace('\n', '\\n')
-
-
-# 🏆 TEMPLATE DEL DOCKER COMPOSE
+# 🏆 FASE FINAL: ARQUITECTURA LIMPIA (SIN PARCHES)
+# Usamos este script porque la imagen Docker ya contiene el código "Vigilante" correcto.
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
   green-agent:
+    # Docker usará tu imagen local reconstruida
     image: ghcr.io/star-xai-protocol/capsbench:latest
     platform: linux/amd64
     container_name: green-agent
     
-    # 🛡️ ESTRATEGIA SEGURA:
-    # 1. Renombramos las rutas viejas para que no molesten.
-    # 2. Usamos un script Python para inyectar el código nuevo ANTES de que arranque Flask.
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        echo '🔧 PREPARANDO INYECCIÓN...'
-        # 1. Apartar rutas viejas
-        sed -i "s|@app.route('/',|@app.route('/old_root',|g" src/green_agent.py
-        sed -i "s|@app.route('/.well-known/agent-card.json'|@app.route('/.well-known/old-card.json'|g" src/green_agent.py
-        
-        # 2. Inyectar Vigilante usando Python (más seguro que sed)
-        python -c "
-        import sys
-        lines = open('src/green_agent.py').readlines()
-        
-        # Buscamos dónde insertar (Antes del bloque main)
-        idx = len(lines)
-        for i, line in enumerate(lines):
-            if 'if __name__' in line:
-                idx = i
-                break
-        
-        # El código inyectado viene de la variable externa
-        code_str = '{vigilante_payload}'
-        # Convertimos el string escapado de vuelta a líneas reales para escribirlo en el archivo
-        code_lines = [line + '\\n' for line in code_str.split('\\n')]
-        
-        # Insertamos y guardamos
-        lines[idx:idx] = code_lines
-        open('src/green_agent.py','w').writelines(lines)
-        print('✅ CÓDIGO INYECTADO CORRECTAMENTE')
-        "
-        
-        echo '🚀 ARRANCANDO SERVIDOR...'
-        python -u src/green_agent.py --host 0.0.0.0 --port 9009
+    # ✅ SIN PARCHES: Arrancamos normal.
+    # El código interno ya tiene el bucle 'while True' y 'glob' que añadiste.
+    entrypoint: ["python", "-u", "src/green_agent.py", "--host", "0.0.0.0", "--port", "9009"]
     
     command: []
     
     environment:
       - PORT=9009
       - LOG_LEVEL=INFO
-      - FORCE_RECREATE=final_fix_{timestamp}
+      # Forzamos recreación para asegurar que usa la imagen nueva
+      - FORCE_RECREATE=native_run_{timestamp}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9009/status"]
@@ -316,6 +247,7 @@ def generate_a2a_scenario(scenario: dict[str, Any]) -> str:
         config="\n".join(config_lines)
     )
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenario", required=True)
@@ -332,19 +264,12 @@ def main():
         for k, v in env_vars.items():
             env_block += f"\n      - {k}={v}"
 
-        # 💤 MANTENEMOS EL SLEEP INFINITY (CRUCIAL)
         participant_services += f"""
   {name}:
     image: ghcr.io/star-xai-protocol/capsbench-purple:latest
     platform: linux/amd64
     container_name: {name}
-    entrypoint: 
-      - /bin/sh
-      - -c
-      - |
-        python -u purple_ai.py
-        echo '✅ AGENTE TERMINÓ. DURMIENDO...'
-        sleep infinity
+    entrypoint: ["python", "-u", "purple_ai.py"]
     {env_block}
     depends_on:
       - green-agent
@@ -352,10 +277,8 @@ def main():
       - agent-network
 """
 
-    # Al formatear, pasamos el payload seguro.
     final_compose = COMPOSE_TEMPLATE.format(
         participant_services=participant_services,
-        vigilante_payload=VIGILANTE_PAYLOAD,
         timestamp=int(time.time())
     )
 
@@ -363,7 +286,7 @@ def main():
         f.write(final_compose)
     
     shutil.copy(args.scenario, "a2a-scenario.toml")
-    print("✅ CÓDIGO GENERADO SIN ERRORES DE SINTAXIS.")
+    print("✅ CÓDIGO LIMPIO: Usando imagen nativa con Vigilante integrado.")
 
 if __name__ == "__main__":
     main()
