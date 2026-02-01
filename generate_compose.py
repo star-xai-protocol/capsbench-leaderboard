@@ -5,6 +5,7 @@ import os
 import re
 import sys
 
+import base64
 import time
 import tomli
 import shutil
@@ -140,8 +141,8 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=9009)
 """
 
-# Aplanamos el código a una línea para no romper el YAML
-VIGILANTE_PAYLOAD = VIGILANTE_CODE.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+# CODIFICAMOS EN BASE64 PARA EVITAR ERRORES DE SINTAXIS EN EL SHELL
+VIGILANTE_PAYLOAD = base64.b64encode(VIGILANTE_CODE.encode('utf-8')).decode('utf-8')
 
 
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
@@ -152,8 +153,8 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 🛡️ ESTRATEGIA: INYECCIÓN SEGURA (FLATTENED)
-    # Usamos printf para escribir el código python formateado correctamente.
+    # 🛡️ ESTRATEGIA: INYECCIÓN VIA BASE64 (INFALIBLE)
+    # Codificamos el parche en base64 para que pase intacto a través del shell.
     entrypoint:
       - /bin/sh
       - -c
@@ -166,8 +167,9 @@ services:
         # Quitar el app.run original
         python -c "lines = [l for l in open('src/green_agent.py') if 'app.run' not in l]; open('src/green_agent.py','w').writelines(lines)"
         
-        # Añadir el código nuevo (usando printf para interpretar los saltos de línea)
-        printf "{vigilante_payload}" >> src/green_agent.py
+        # Añadir el código nuevo DECODIFICANDO BASE64
+        # Esto evita cualquier error de comillas o saltos de línea
+        echo "{vigilante_payload}" | base64 -d >> src/green_agent.py
         
         echo '🚀 ARRANCANDO...'
         python -u src/green_agent.py
