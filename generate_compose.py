@@ -208,7 +208,7 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
         green_image=green["image"],
         green_port=DEFAULT_PORT,
         green_env=format_env_vars(green.get("env", {})),
-        green_depends="",  # <--- CAMBIO CLAVE: Cadena vacía para romper el ciclo
+        green_depends=" []",
         participant_services=participant_services,
         client_depends=format_depends_on(all_services)
     )
