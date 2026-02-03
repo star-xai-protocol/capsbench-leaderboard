@@ -64,37 +64,34 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇👇👇 INICIO DEL FIX 404 👇👇👇
-    # Este bloque arregla el error de "agent-card.json not found"
+    # 👇👇👇 INICIO DEL FIX 404 (CON DOBLES LLAVES) 👇👇👇
     entrypoint:
       - /bin/sh
       - -c
       - |
         echo "🔧 APLICANDO FIX DE AGENT-CARD..."
-        # Inyectamos la ruta faltante en el servidor Flask
         cat <<EOF >> src/green_agent.py
 
         from flask import jsonify
         @app.route('/.well-known/agent-card.json', methods=['GET'])
         def agent_card_fix_injected():
-            return jsonify({
+            return jsonify({{
                 "name": "GreenAgent Fix",
                 "version": "1.0.0",
                 "description": "Fixed Runtime",
                 "url": "http://green-agent:9009/",
                 "protocolVersion": "0.3.0",
-                "capabilities": {}
-            })
+                "capabilities": {{}}
+            }})
         EOF
         
         echo "🚀 ARRANCANDO SERVIDOR..."
-        # Ejecutamos el comando original
         exec python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}
     # 👆👆👆 FIN DEL FIX 404 👆👆👆
 
     environment:{green_env}
     healthcheck:
-      # Mantenemos el healthcheck que ya funcionaba
+      # Test rápido /status
       test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
       interval: 5s
       timeout: 3s
