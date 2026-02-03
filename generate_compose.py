@@ -39,11 +39,6 @@ DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
 
 # --- 🛠️ SCRIPT DE REPARACIÓN MAESTRO ---
-# Este script de Python contiene TODA la lógica necesaria.
-# 1. Asegura imports.
-# 2. Inyecta la ruta OBLIGATORIA /agent-card.json (Soluciona el 404).
-# 3. Inyecta la ruta de bloqueo / (Soluciona el cierre prematuro).
-# 4. Parchea el archivo en disco y lo ejecuta.
 FIX_SCRIPT_SOURCE = r"""
 import sys, os, re, json, time, glob
 
@@ -66,8 +61,8 @@ if "import time" not in content:
 if "from flask import Flask" in content and "jsonify" not in content:
     content = content.replace("from flask import Flask", "from flask import Flask, jsonify, request")
 
-# === 2. AÑADIR RUTA OBLIGATORIA: agent-card.json ===
-# Esta ruta es vital para que agentbeats-client no de error 404.
+# === 2. AÑADIR RUTA OBLIGATORIA: agent-card.json (CORREGIDA) ===
+# Se han añadido 'url' y 'skills' que faltaban en el intento anterior.
 agent_card_route = r'''
 @app.route("/.well-known/agent-card.json")
 def agent_card_fix():
@@ -76,6 +71,8 @@ def agent_card_fix():
         "description": "Agente verde parcheado para CapsBench / AgentBeats",
         "version": "1.0",
         "protocolVersion": "0.3.0",
+        "url": "http://green-agent:9009/", 
+        "skills": [],
         "capabilities": {},
         "endpoints": [
             {
@@ -92,24 +89,19 @@ def agent_card_fix():
 if "/.well-known/agent-card.json" not in content:
     print("➕ Añadiendo ruta /.well-known/agent-card.json obligatoria...", flush=True)
     if "app =" in content:
-        # Insertar justo después de crear la app para asegurar que @app existe
         parts = content.split("app =", 1)
-        # Reconstruimos asegurando que cogemos la linea completa de 'app = ...'
         before_app = parts[0] + "app ="
         after_app = parts[1]
         
-        # Buscar el final de la línea donde se crea app
         if "\n" in after_app:
             lines = after_app.split("\n", 1)
             content = before_app + lines[0] + "\n" + agent_card_route + "\n" + lines[1]
         else:
             content = before_app + after_app + "\n" + agent_card_route
     else:
-        # Fallback: al final de los imports
         content = agent_card_route + "\n\n" + content
 
 # === 3. NUEVA dummy_rpc con LONG-POLLING (Bloqueo) ===
-# Esto evita que el cliente se cierre antes de tiempo.
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
@@ -117,7 +109,6 @@ def dummy_rpc():
     start_time = time.time()
     
     while True:
-        # Buscamos en todas las rutas posibles donde el juego deja resultados
         patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl',
                     'output/results.json', 'output/*.json', '*.json']
         files = []
@@ -125,17 +116,14 @@ def dummy_rpc():
             files.extend(glob.glob(p))
             
         if files:
-            # Ordenar por fecha (el más nuevo primero)
             files.sort(key=os.path.getmtime, reverse=True)
             last_file = files[0]
             age = time.time() - os.path.getmtime(last_file)
             
-            # Si el archivo es reciente (< 10 min)
             if age < 600:
                 filename = os.path.basename(last_file)
                 print(f"✅ [FIN] Detectado resultado reciente: {filename} ({age:.1f}s ago)", flush=True)
                 
-                # Devolvemos el JSON plano que le gusta a Pydantic
                 return jsonify({
                     "jsonrpc": "2.0", "id": 1,
                     "result": {
@@ -146,7 +134,6 @@ def dummy_rpc():
                     }
                 })
         
-        # Timeout de seguridad (30 min)
         if time.time() - start_time > 1800:
             print("⏰ Timeout esperando resultados", flush=True)
             return jsonify({"error": "timeout_waiting_results"}), 504
@@ -157,17 +144,12 @@ def dummy_rpc():
 # === 4. Reemplazo de dummy_rpc antigua ===
 if "def dummy_rpc():" in content:
     print("✅ Reemplazando dummy_rpc antigua...", flush=True)
-    # Comentamos el decorador antiguo para desactivar la ruta
     content = content.replace("@app.route('/', methods=['POST', 'GET'])", "# OLD_DUMMY_RPC_DISABLED")
     content = content.replace('@app.route("/", methods=[\'POST\', \'GET\'])', "# OLD_DUMMY_RPC_DISABLED")
-    
-    # Renombramos la función antigua para evitar conflictos
     content = content.replace("def dummy_rpc():", "def old_dummy_rpc():")
     
-    # Inyectar la nueva función antes del bloque Main
     if "if __name__" in content:
         parts = content.split("if __name__")
-        # Insertamos antes del último bloque if __name__ (por si hay varios split)
         content = "".join(parts[:-1]) + "\n" + new_dummy_rpc + "\n\nif __name__" + parts[-1]
     else:
         content += "\n" + new_dummy_rpc
@@ -179,14 +161,13 @@ else:
 with open(target_file, 'w') as f:
     f.write(content)
 
-print("✅ Green Agent completamente parcheado (Card + Long-Polling). Arrancando...", flush=True)
+print("✅ Green Agent parcheado (Card V2 + Long-Polling). Arrancando...", flush=True)
 sys.stdout.flush()
 
-# Ejecutamos el servidor modificado pasando los argumentos recibidos
 os.execvp("python", ["python", "-u", target_file] + sys.argv[1:])
 """
 
-# Codificamos el script en Base64 para evitar cualquier error de sintaxis YAML
+# Codificamos el script en Base64
 FIX_SCRIPT_B64 = base64.b64encode(FIX_SCRIPT_SOURCE.encode('utf-8')).decode('utf-8')
 
 
@@ -255,7 +236,6 @@ services:
     container_name: green-agent
     
     # 👇 FIX ROBUSTO: Decodifica el script B64 y lo ejecuta.
-    # Pasa los argumentos de host y puerto al script de Python.
     entrypoint: 
       - /bin/sh
       - -c
@@ -348,7 +328,7 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
         green_depends=" []",  
         participant_services=participant_services,
         client_depends=" []", 
-        fix_b64=FIX_SCRIPT_B64  # Inyectamos el script codificado
+        fix_b64=FIX_SCRIPT_B64
     )
 
 
@@ -418,7 +398,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL B64 FIX)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL B64 FIX V2)")
 
 if __name__ == "__main__":
     main()
