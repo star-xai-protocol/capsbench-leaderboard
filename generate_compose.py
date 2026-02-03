@@ -55,7 +55,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 PLANTILLA SERVIDOR: VIGILANTE EN PYTHON PURO (Sin errores YAML)
+# 🟢 PLANTILLA SERVIDOR: VIGILANTE EN PYTHON PURO (Long Polling)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -65,7 +65,7 @@ services:
     container_name: green-agent
     
     # 👇 FIX DE RED: Usamos Python para inyectar el código.
-    # Esto evita los errores de "expected ':'" en YAML.
+    # Esto evita los errores de "expected ':'" en YAML y asegura la indentación.
     entrypoint:
       - python
       - -c
@@ -95,7 +95,7 @@ services:
 
         # 4. Definimos el codigo del parche (Rutas bloqueantes)
         # Este codigo intercepta la raiz y espera a que exista el archivo de replay
-        # Usamos dobles llaves {{{{ }}}} para que Python .format() no se rompa
+        # Usamos dobles llaves {{{{ }}}} para que Python .format() no se rompa al generar el YAML
         patch_code = \"\"\"
         @app.route('/.well-known/agent-card.json')
         def card_fix():
@@ -122,7 +122,7 @@ services:
                 files = sorted(glob.glob('/app/src/replays/*.jsonl') + glob.glob('src/replays/*.jsonl'), key=os.path.getmtime)
                 
                 if files:
-                    # Chequeo simple de "reciente" (por si acaso hay basura vieja)
+                    # Chequeo simple de "reciente" (por si acaso hay basura vieja del contenedor anterior)
                     # Si el archivo tiene menos de 10 mins, es valido.
                     if (time.time() - os.path.getmtime(files[-1])) < 600:
                         print("✅ JUEGO TERMINADO. LIBERANDO CLIENTE.", flush=True)
@@ -165,7 +165,6 @@ services:
 
         print("🚀 ARRANCANDO SERVIDOR PARCHEADO...", flush=True)
         # 7. Ejecutamos el servidor original (ahora modificado)
-        # Asumimos que el script esta en src/green_agent.py
         sys.stdout.flush()
         os.system("python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}")
       
@@ -262,7 +261,7 @@ def parse_scenario(scenario_path: Path) -> dict[str, Any]:
 
     participants = data.get("participants", [])
 
-    # 👇 AQUI ESTABA EL ERROR DE LA IMAGEN (CORREGIDO)
+    # 👇 LÍNEA CORREGIDA (Aquí estaba el fallo)
     names = [p.get("name") for p in participants]
     
     duplicates = [name for name in set(names) if names.count(name) > 1]
@@ -397,7 +396,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (ROBUST VIGILANTE)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL FIXED VERSION)")
 
 if __name__ == "__main__":
     main()
