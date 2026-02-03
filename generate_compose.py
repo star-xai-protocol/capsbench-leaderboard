@@ -37,39 +37,53 @@ DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
 
-# --- 🛠️ EL SCRIPT DE REPARACIÓN (SIMPLE Y DIRECTO) ---
-# Este script de Python se ejecutará DENTRO del contenedor antes de arrancar el servidor.
-# Su único trabajo es buscar la función 'dummy_rpc' mala y cambiarla por la buena.
+# --- 🛠️ SCRIPT DE REPARACIÓN (CLONACIÓN SEGURA) ---
+# Este script se ejecuta DENTRO del contenedor.
+# Crea un nuevo archivo 'green_agent_fixed.py' basado en el original.
 FIX_SCRIPT = r"""
-import sys, os, re
+import sys
+import os
+import time
+import glob
 
-print("🔧 [FIX] Iniciando reparación del servidor...", flush=True)
+print("🔧 [FIX] Iniciando clonación y reparación del servidor...", flush=True)
 
-target_file = 'src/green_agent.py'
-if not os.path.exists(target_file): target_file = 'green_agent.py'
+# 1. Localizar archivo original
+original_file = 'src/green_agent.py'
+if not os.path.exists(original_file):
+    original_file = 'green_agent.py'
 
-if not os.path.exists(target_file):
-    print(f"❌ Error: No encuentro {target_file}", flush=True)
+if not os.path.exists(original_file):
+    print(f"❌ Error: No encuentro {original_file}", flush=True)
     sys.exit(1)
 
-with open(target_file, 'r') as f:
+print(f"📄 Leyendo original: {original_file}", flush=True)
+with open(original_file, 'r') as f:
     content = f.read()
 
-# 1. Verificar si ya tiene imports necesarios
-if "import time" not in content:
-    content = "import time, glob, os\n" + content
-# Asegurar que jsonify está disponible
-if "from flask import Flask" in content and "jsonify" not in content:
-    content = content.replace("from flask import Flask", "from flask import Flask, jsonify")
+# 2. Desactivar la ruta antigua '/' comentando su decorador
+# Esto evita que Flask intente registrar dos funciones para la misma ruta.
+if "@app.route('/', methods=['POST', 'GET'])" in content:
+    content = content.replace("@app.route('/', methods=['POST', 'GET'])", "# ROUTE_DISABLED_BY_FIX")
+    print("✅ Ruta antigua desactivada.", flush=True)
+elif '@app.route("/", methods=[\'POST\', \'GET\'])' in content:
+    content = content.replace('@app.route("/", methods=[\'POST\', \'GET\'])', "# ROUTE_DISABLED_BY_FIX")
+    print("✅ Ruta antigua desactivada (comillas dobles).", flush=True)
+else:
+    print("⚠️ No se encontró la ruta exacta para desactivar. Intentando regex...", flush=True)
+    import re
+    content = re.sub(r"@app\.route\s*\(\s*['\"]/['\"]\s*,", "# @app.route('/',", content)
 
-# 2. DEFINIR LA NUEVA LÓGICA (LONG POLLING)
-# Esta función reemplazará a la original.
-# Obliga al cliente a esperar hasta que aparezca el archivo de resultados.
-new_dummy_rpc = r'''
+# 3. Código de la NUEVA función (Bloqueo / Long Polling)
+# Incluye imports necesarios dentro de la función por seguridad.
+new_logic = r'''
+# --- LOGICA INYECTADA POR FIX ---
+from flask import jsonify
+import time, glob, os
+
 @app.route('/', methods=['POST', 'GET'])
-def dummy_rpc():
+def blocking_rpc():
     print("🔒 [BLOQUEO] Cliente conectado. Esperando fin de partida...", flush=True)
-    import time, glob, os
     start_time = time.time()
     
     while True:
@@ -83,11 +97,12 @@ def dummy_rpc():
             files.sort(key=os.path.getmtime)
             last_file = files[-1]
             
-            # Si el archivo es reciente (< 10 min), es el nuestro
+            # Si el archivo tiene menos de 10 min, es la partida actual
             if (time.time() - os.path.getmtime(last_file)) < 600:
-                print(f"✅ [FIN] Detectado: {os.path.basename(last_file)}. Liberando cliente.", flush=True)
+                filename = os.path.basename(last_file)
+                print(f"✅ [FIN] Detectado: {filename}. Liberando cliente.", flush=True)
                 
-                # Respuesta JSON Plano (Compatible con Pydantic)
+                # JSON PLANO (Flattened) para AgentBeats Client
                 return jsonify({
                     "jsonrpc": "2.0", "id": 1,
                     "result": {
@@ -98,45 +113,35 @@ def dummy_rpc():
                     }
                 })
         
-        # Timeout de seguridad (20 min)
         if time.time() - start_time > 1200:
             return jsonify({"error": "timeout_waiting_results"})
             
         time.sleep(5)
+# -------------------------------
 '''
 
-# 3. REEMPLAZO QUIRÚRGICO
-# Buscamos la definición original y la comentamos para desactivarla.
-if "def dummy_rpc():" in content:
-    print("✅ Función dummy_rpc encontrada. Reemplazando...", flush=True)
-    
-    # Desactivar la ruta antigua
-    content = content.replace("@app.route('/', methods=['POST', 'GET'])", "# OLD_ROUTE_DISABLED")
-    content = content.replace("def dummy_rpc():", "def old_dummy_rpc_disabled():")
-    
-    # Inyectar la nueva función antes del bloque Main
-    if "if __name__" in content:
-        parts = content.split("if __name__")
-        content = parts[0] + "\n" + new_dummy_rpc + "\n\nif __name__" + parts[1]
-    else:
-        content += "\n" + new_dummy_rpc
-        
-    # Guardar cambios
-    with open(target_file, 'w') as f:
-        f.write(content)
-    print("✅ Archivo parcheado exitosamente.", flush=True)
-
+# 4. Inyectar la nueva lógica
+# La insertamos justo después de crear la app Flask para asegurar que 'app' existe.
+if "app = Flask(__name__)" in content:
+    parts = content.split("app = Flask(__name__)")
+    new_content = parts[0] + "app = Flask(__name__)\n" + new_logic + "\n" + parts[1]
 else:
-    print("⚠️ No encontré dummy_rpc. Inyectando al final...", flush=True)
-    content += "\n" + new_dummy_rpc
-    with open(target_file, 'w') as f:
-        f.write(content)
+    # Fallback: Inyectar después de los imports (asumiendo que 'app' se crea por ahí)
+    print("⚠️ No encontré 'app = Flask', inyectando al final de los imports...", flush=True)
+    new_content = "from flask import Flask, jsonify\n" + content + "\n" + new_logic
 
-# 4. EJECUTAR EL SERVIDOR
-print("🚀 Arrancando servidor parcheado...", flush=True)
+# 5. Guardar en un NUEVO archivo
+fixed_file = 'src/green_agent_fixed.py'
+with open(fixed_file, 'w') as f:
+    f.write(new_content)
+
+print(f"✅ Archivo parcheado guardado en: {fixed_file}", flush=True)
+
+# 6. Ejecutar el nuevo archivo
+print("🚀 Arrancando servidor FIXED...", flush=True)
 sys.stdout.flush()
-# Ejecutamos el archivo modificado usando python
-os.execvp("python", ["python", "-u", target_file] + sys.argv[1:])
+# Pasamos los mismos argumentos que recibió el script original
+os.execvp("python", ["python", "-u", fixed_file] + sys.argv[1:])
 """
 
 
@@ -196,8 +201,6 @@ def parse_scenario(scenario_path: Path) -> dict[str, Any]:
 
 
 # 🟢 PLANTILLA SERVIDOR
-# Usamos un entrypoint simple en Python que escribe el script de reparación y lo ejecuta.
-# Esto evita problemas de sintaxis YAML complejos.
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -206,8 +209,7 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX SIMPLE: Escribir el script de reparación en disco y ejecutarlo con Python.
-    # Usamos dobles corchetes para escapar el string multi-linea en el template.
+    # 👇 FIX: Script Python embebido que clona y parchea el servidor.
     entrypoint:
       - python
       - -c
@@ -243,7 +245,7 @@ networks:
     driver: bridge
 """
 
-# 🟢 PLANTILLA PARTICIPANTE (Modo Zombi)
+# 🟢 PARTICIPANTE
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -294,8 +296,7 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
 
     all_services = ["green-agent"] + participant_names
 
-    # Indentamos el script de fix para que encaje en el YAML
-    # Añadimos 8 espacios a cada línea del script
+    # Indentamos el script para que encaje en el YAML
     fix_script_indented = "\n".join(["        " + line for line in FIX_SCRIPT.splitlines()])
 
     return COMPOSE_TEMPLATE.format(
@@ -375,7 +376,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL DIRECT SCRIPT)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL CLONING FIX)")
 
 if __name__ == "__main__":
     main()
