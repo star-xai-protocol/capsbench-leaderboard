@@ -55,7 +55,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 PLANTILLA SERVIDOR: Con el parche SED para arreglar el error 404 del cliente
+# 🟢 PLANTILLA SERVIDOR: Mantiene el fix del 404 para el cliente
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -64,7 +64,7 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX 404: Inyectamos la tarjeta de identidad usando SED (seguro para Python)
+    # 👇 FIX 404: Inyectamos la tarjeta de identidad usando SED
     entrypoint:
       - /bin/sh
       - -c
@@ -73,8 +73,8 @@ services:
         # 1. Importar jsonify
         sed -i 's/from flask import Flask/from flask import Flask, jsonify/' src/green_agent.py
         
-        # 2. Inyectar la ruta con TODOS los campos requeridos (evita error de validación)
-        # Usamos dobles llaves {{{{ }}}} para escapar en Python .format()
+        # 2. Inyectar la ruta con TODOS los campos requeridos
+        # ATENCION: Las dobles llaves {{{{ }}}} son obligatorias aquí para Python
         sed -i '/if __name__/i @app.route("/.well-known/agent-card.json")\\ndef card_fix(): return jsonify({{"name":"GreenFix","version":"1.0","description":"Fix","url":"http://green-agent:9009/","protocolVersion":"0.3.0","capabilities":{{}},"defaultInputModes":["text"],"defaultOutputModes":["text"],"skills":[]}})' src/green_agent.py
         
         echo "🚀 ARRANCANDO SERVIDOR..."
@@ -109,7 +109,8 @@ networks:
     driver: bridge
 """
 
-# 🟢 PLANTILLA PARTICIPANTE: MODO ZOMBI (Sin variable green_port para evitar KeyError)
+# 🟢 PLANTILLA PARTICIPANTE: MODO ZOMBI
+# IMPORTANTE: No usamos {green_port} aquí para evitar el KeyError
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -121,8 +122,7 @@ PARTICIPANT_TEMPLATE = """  {name}:
         condition: service_healthy
     healthcheck:
       # "exit 0" significa SIEMPRE SANO.
-      # Esto evita que Docker mate al agente si tarda mucho en pensar (Turno 3).
-      # Y lo más importante: NO USA {green_port}, así que no dará KeyError.
+      # Esto evita que Docker mate al agente si tarda mucho en pensar.
       test: ["CMD-SHELL", "exit 0"]
       interval: 10s
       timeout: 5s
@@ -156,7 +156,7 @@ def resolve_image(agent: dict, name: str) -> None:
         info = fetch_agent_info(agent["agentbeats_id"])
         agent["image"] = info["docker_image"]
         
-        # 🟢 CAPTURAMOS EL ID DEL WEBHOOK (Para que el resultado salga bien)
+        # 🟢 CAPTURAMOS EL ID DEL WEBHOOK
         if "id" in info:
             agent["webhook_id"] = info["id"]
         
@@ -208,8 +208,8 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
 
     participant_names = [p["name"] for p in participants]
 
-    # Aquí generamos los servicios de los participantes
-    # Ya no pasamos 'green_port' porque la plantilla nueva no lo necesita
+    # Generamos los servicios de los participantes
+    # NOTA: Ya no usamos 'green_port' aquí, por lo que el KeyError desaparecerá.
     participant_services = "\n".join([
         PARTICIPANT_TEMPLATE.format(
             name=p["name"],
