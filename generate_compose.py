@@ -55,9 +55,8 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 SERVIDOR (Green Agent) - FIX "LONG POLLING"
-# Usamos un script de Python en el entrypoint para inyectar el código de bloqueo
-# dentro de green_agent.py antes de que arranque.
+# 🟢 PLANTILLA SERVIDOR: REEMPLAZO QUIRÚRGICO DE DUMMY_RPC
+# Usamos un script de Python en el entrypoint para modificar green_agent.py
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -66,81 +65,141 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX: Script Python que modifica green_agent.py para BLOQUEAR al cliente
+    # 👇 FIX: Script Python que reemplaza SOLO la función dummy_rpc defectuosa
     entrypoint:
       - python
       - -c
       - |
         import sys, os
 
-        print("🔧 FIX: Inyectando lógica de bloqueo (Long Polling)...", flush=True)
+        print("🔧 FIX: Parcheando función dummy_rpc para compatibilidad estricta...", flush=True)
 
-        # 1. Definimos la nueva función RPC que BLOQUEA la conexión
-        #    Esto obliga al cliente a esperar hasta que aparezca el archivo de resultados.
+        # 1. Definimos la NUEVA función dummy_rpc (Streaming + JSON Plano)
+        #    Esta versión mantiene la conexión abierta y envía los campos que Pydantic exige.
         new_rpc_code = r'''
-        @app.route('/', methods=['POST', 'GET'])
-        def dummy_rpc():
-            print("🔒 [BLOQUEO] Cliente conectado. Reteniendo respuesta hasta fin de partida...", flush=True)
-            import time, glob, os
-            
-            # Esperamos hasta 20 minutos (1200 segundos)
-            start_time = time.time()
-            while True:
-                # Buscamos archivos de replay recientes (.jsonl)
-                files = sorted(glob.glob('replays/*.jsonl') + glob.glob('src/replays/*.jsonl'), key=os.path.getmtime)
-                
-                # Si encontramos un archivo reciente (< 10 min), la partida ha terminado
-                if files and (time.time() - os.path.getmtime(files[-1]) < 600):
-                    last_file = os.path.basename(files[-1])
-                    print(f"✅ [FIN] Partida detectada: {{last_file}}. Liberando cliente.", flush=True)
-                    
-                    # Respondemos con el JSON exacto que Pydantic quiere
-                    return jsonify({{
-                        "jsonrpc": "2.0", "id": 1, 
-                        "result": {{
-                            "contextId": "ctx", "taskId": "task", "id": "task",
-                            "status": {{"state": "completed"}}, "final": True,
-                            "messageId": "msg-done", "role": "assistant",
-                            "parts": [{{"text": "Game Finished", "mimeType": "text/plain"}}]
-                        }}
-                    }})
-                
-                if time.time() - start_time > 1200:
-                    return jsonify({{"error": "timeout"}})
-                    
-                time.sleep(5) # Esperar 5s antes de volver a mirar el disco
-        '''
+@app.route('/', methods=['POST', 'GET'])
+def dummy_rpc():
+    def generate():
+        print("👁️ [VIGILANTE V2] Cliente conectado. Iniciando stream compatible...", flush=True)
+        
+        # Estructura BASE (Flattened) para pasar validación Pydantic
+        base_payload = {
+            "jsonrpc": "2.0", "id": 1, 
+            "result": {
+                "contextId": "ctx", "taskId": "task", "id": "task",
+                "status": {"state": "working"}, "final": False,
+                "messageId": "msg-alive", "role": "assistant", 
+                "parts": [{"text": "Game in progress...", "mimeType": "text/plain"}]
+            }
+        }
+        
+        # Latido inicial
+        yield "data: " + json.dumps(base_payload) + "\\n\\n"
 
-        # 2. Leemos el archivo original del contenedor
+        # Bucle de vigilancia
+        start_time = time.time()
+        while True:
+            # Buscamos resultados recientes (< 5 min de antigüedad)
+            files = sorted(glob.glob('results/*.json') + glob.glob('src/results/*.json') + glob.glob('replays/*.jsonl') + glob.glob('src/replays/*.jsonl'), key=os.path.getmtime)
+            
+            if files:
+                last_file = files[-1]
+                # Si el archivo es reciente (menos de 300s), asumimos que es NUESTRO juego
+                if (time.time() - os.path.getmtime(last_file)) < 300:
+                    filename = os.path.basename(last_file)
+                    print(f"✅ [FIN] Juego detectado: {filename}", flush=True)
+                    time.sleep(2) # Margen de escritura
+                    
+                    # Respuesta FINAL
+                    final_payload = {
+                        "jsonrpc": "2.0", "id": 1, 
+                        "result": {
+                            "contextId": "ctx", "taskId": "task", "id": "task",
+                            "status": {"state": "completed"}, "final": True,
+                            "messageId": "msg-done", "role": "assistant", 
+                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}]
+                        }
+                    }
+                    yield "data: " + json.dumps(final_payload) + "\\n\\n"
+                    break
+            
+            # Timeout de seguridad (20 min)
+            if time.time() - start_time > 1200:
+                print("⚠️ [TIMEOUT] Espera agotada.", flush=True)
+                break
+                
+            time.sleep(3)
+            yield "data: " + json.dumps(base_payload) + "\\n\\n"
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+'''
+
+        # 2. Leemos el archivo original
         target_file = 'src/green_agent.py'
         if not os.path.exists(target_file): target_file = 'green_agent.py' # Fallback
 
         with open(target_file, 'r') as f:
             content = f.read()
 
-        # 3. Desactivamos la función dummy_rpc original renombrándola
+        # 3. Reemplazamos la función antigua
+        #    Buscamos el decorador @app.route('/', ...) y reemplazamos hasta el final de la función
+        #    Como Python usa indentación, asumimos que dummy_rpc termina antes del siguiente bloque sin indentar.
+        
         if "def dummy_rpc():" in content:
-            content = content.replace("def dummy_rpc():", "def old_dummy_rpc_disabled():")
-            content = content.replace("@app.route('/', methods=['POST', 'GET'])", "# Route disabled")
+            # Estrategia: Reemplazar todo el bloque dummy_rpc antiguo con nuestra versión nueva.
+            # Usamos split para cortar justo donde empieza la función antigua.
+            pattern = "@app.route('/', methods=['POST', 'GET'])"
+            parts = content.split(pattern)
             
-            # Aseguramos que 'jsonify' esté importado
-            if "from flask import Flask" in content and "jsonify" not in content:
-                content = content.replace("from flask import Flask", "from flask import Flask, jsonify")
+            if len(parts) > 1:
+                pre_content = parts[0]
+                post_content = parts[1]
+                
+                # Buscamos dónde termina la función antigua (el siguiente bloque sin indentar o decorador)
+                # En el código original, dummy_rpc es la última función antes de "if __name__"
+                # o antes de "# END A2A COMPATIBILITY".
+                
+                # Vamos a cortar hasta el siguiente decorador o bloque principal
+                next_block_markers = ["# =============================================================================", "if __name__ == '__main__':", "@app.route"]
+                
+                rest_of_code = ""
+                for marker in next_block_markers:
+                    if marker in post_content:
+                        # Encontramos el final de la función, cortamos ahí
+                        # Pero cuidado, dummy_rpc está dentro de post_content, así que split[1] es lo que sigue
+                        subparts = post_content.split(marker, 1)
+                        if len(subparts) > 1:
+                            rest_of_code = marker + subparts[1]
+                            break
+                
+                # Si no encontramos marcadores, asumimos que era lo último del archivo (raro pero posible)
+                if not rest_of_code and "if __name__" in content:
+                     rest_of_code = "if __name__" + content.split("if __name__")[-1]
 
-            # 4. Insertamos nuestra nueva función antes del bloque main
-            if "if __name__" in content:
-                content = content.replace("if __name__", new_rpc_code + "\\n\\nif __name__")
+                # Construimos el nuevo contenido
+                new_content = pre_content + new_rpc_code + "\\n\\n" + rest_of_code
+                
+                # Aseguramos imports necesarios al principio
+                if "from flask import" in new_content:
+                     new_content = new_content.replace("from flask import Flask", "from flask import Flask, jsonify, Response, stream_with_context")
+                else:
+                     new_content = "from flask import Flask, jsonify, Response, stream_with_context\\n" + new_content
+
+                # Guardamos
+                with open(target_file, 'w') as f:
+                    f.write(new_content)
+                print("✅ Función dummy_rpc reemplazada con éxito.", flush=True)
             else:
-                content += "\\n" + new_rpc_code
-
-            # 5. Guardamos el archivo modificado
-            with open(target_file, 'w') as f:
-                f.write(content)
-            print("✅ Código inyectado correctamente.", flush=True)
+                print("⚠️ No se pudo localizar el punto de inyección exacto.", flush=True)
         else:
-            print("⚠️ No se encontró dummy_rpc, el parche podría no funcionar.", flush=True)
+            print("⚠️ No se encontró la función dummy_rpc original. Inyectando al final...", flush=True)
+            # Fallback: Añadir al final (antes del main)
+            parts = content.split("if __name__")
+            new_content = parts[0] + "\\n" + new_rpc_code + "\\nif __name__" + parts[1]
+            with open(target_file, 'w') as f:
+                f.write(new_content)
 
-        # 6. Arrancamos el servidor normalmente
+        # 4. Arrancamos el servidor
         print("🚀 Arrancando Green Agent...", flush=True)
         sys.stdout.flush()
         os.system(f"python -u {{target_file}} --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}")
@@ -175,7 +234,6 @@ networks:
 """
 
 # 🟢 PARTICIPANTE (Purple Agent) - MODO ZOMBI
-# "exit 0" en el healthcheck evita que Docker lo mate si tarda en pensar (Turno 3).
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -186,7 +244,7 @@ PARTICIPANT_TEMPLATE = """  {name}:
       green-agent:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "exit 0"] 
+      test: ["CMD-SHELL", "exit 0"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -373,7 +431,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (CLEAN VIGILANTE FIX)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL SOURCE CODE PATCH)")
 
 if __name__ == "__main__":
     main()
