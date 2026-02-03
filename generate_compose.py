@@ -127,21 +127,30 @@ def dummy_rpc():
                     # Mensaje FINAL (Status: Completed) - Opción 1
                     # Calculamos ruta absoluta para la URI
                     abs_path = os.path.abspath(last_file)
-                    
+
                     final_msg = {
                         "jsonrpc": "2.0", "id": 1,
                         "result": {
-                            "contextId": "ctx", "taskId": "task", "id": "task",
-                            "status": {"state": "completed"}, "final": True,
-                            "messageId": "msg-done", "role": "assistant",
+                            "contextId": "ctx",
+                            "taskId": "task",
+                            "id": "task",
+                            "status": {"state": "completed"},
+                            "final": True,
+                            "messageId": "msg-done",
+                            "role": "assistant",
+                    
+                            # Mensaje humano (opcional)
                             "parts": [
-                                {"text": "Game Finished", "mimeType": "text/plain"},
+                                {"text": "Game Finished", "mimeType": "text/plain"}
+                            ],
+                    
+                            # 🔑 LO QUE EL CLIENTE ITERA
+                            "artifacts": [
                                 {
-                                    "file": {
-                                        "uri": "file://" + abs_path,
-                                        "mimeType": "application/jsonl",
-                                        "name": os.path.basename(last_file)
-                                    }
+                                    "type": "file",
+                                    "uri": "file://" + abs_path,
+                                    "mimeType": "application/jsonl",
+                                    "name": os.path.basename(last_file)
                                 }
                             ]
                         }
