@@ -55,8 +55,9 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 PLANTILLA SERVIDOR: CIRUGÍA EN EL CODIGO FUENTE
-# Usamos un script de Python en el entrypoint para reescribir la función dummy_rpc
+# 🟢 SERVIDOR (Green Agent) - FIX "LONG POLLING"
+# Usamos un script de Python en el entrypoint para inyectar el código de bloqueo
+# dentro de green_agent.py antes de que arranque.
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -65,98 +66,84 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX MAESTRO: Reescribimos la logica del servidor antes de arrancarlo
+    # 👇 FIX: Script Python que modifica green_agent.py para BLOQUEAR al cliente
     entrypoint:
       - python
       - -c
       - |
         import sys, os
 
-        print("🔧 FIX: Reescribiendo logica del servidor (Vigilante v2)...", flush=True)
+        print("🔧 FIX: Inyectando lógica de bloqueo (Long Polling)...", flush=True)
 
-        # Leemos el archivo original
-        with open('src/green_agent.py', 'r') as f:
+        # 1. Definimos la nueva función RPC que BLOQUEA la conexión
+        #    Esto obliga al cliente a esperar hasta que aparezca el archivo de resultados.
+        new_rpc_code = r'''
+        @app.route('/', methods=['POST', 'GET'])
+        def dummy_rpc():
+            print("🔒 [BLOQUEO] Cliente conectado. Reteniendo respuesta hasta fin de partida...", flush=True)
+            import time, glob, os
+            
+            # Esperamos hasta 20 minutos (1200 segundos)
+            start_time = time.time()
+            while True:
+                # Buscamos archivos de replay recientes (.jsonl)
+                files = sorted(glob.glob('replays/*.jsonl') + glob.glob('src/replays/*.jsonl'), key=os.path.getmtime)
+                
+                # Si encontramos un archivo reciente (< 10 min), la partida ha terminado
+                if files and (time.time() - os.path.getmtime(files[-1]) < 600):
+                    last_file = os.path.basename(files[-1])
+                    print(f"✅ [FIN] Partida detectada: {{last_file}}. Liberando cliente.", flush=True)
+                    
+                    # Respondemos con el JSON exacto que Pydantic quiere
+                    return jsonify({{
+                        "jsonrpc": "2.0", "id": 1, 
+                        "result": {{
+                            "contextId": "ctx", "taskId": "task", "id": "task",
+                            "status": {{"state": "completed"}}, "final": True,
+                            "messageId": "msg-done", "role": "assistant",
+                            "parts": [{{"text": "Game Finished", "mimeType": "text/plain"}}]
+                        }}
+                    }})
+                
+                if time.time() - start_time > 1200:
+                    return jsonify({{"error": "timeout"}})
+                    
+                time.sleep(5) # Esperar 5s antes de volver a mirar el disco
+        '''
+
+        # 2. Leemos el archivo original del contenedor
+        target_file = 'src/green_agent.py'
+        if not os.path.exists(target_file): target_file = 'green_agent.py' # Fallback
+
+        with open(target_file, 'r') as f:
             content = f.read()
 
-        # 1. Definimos el NUEVO codigo del Vigilante (Streaming + Validacion Pydantic)
-        # Este codigo sustituye a la funcion dummy_rpc original.
-        new_rpc_code = \"\"\"
-@app.route('/', methods=['POST', 'GET'])
-def dummy_rpc():
-    def generate():
-        print('👁️ VIGILANTE MEJORADO: Iniciando stream...', flush=True)
-        
-        # Estructura BASE que pasa la validacion (Flattened)
-        # Pydantic busca messageId, role, parts en el 'result'
-        base_res = {{
-            "jsonrpc": "2.0", "id": 1, 
-            "result": {{
-                "contextId": "ctx", "taskId": "task", "id": "task",
-                "status": {{"state": "working"}}, "final": False,
-                "messageId": "m-alive", "role": "assistant", "parts": [{{"text": "...", "mimeType": "text/plain"}}]
-            }}
-        }}
-        
-        # Enviar primer latido inmediatamente
-        yield 'data: ' + json.dumps(base_res) + '\\n\\n'
-
-        while True:
-            # Buscamos resultados (replays jsonl o summaries json)
-            # Buscamos recursivamente en varias rutas posibles
-            files = sorted(glob.glob('results/*.json') + glob.glob('src/replays/*.jsonl') + glob.glob('replays/*.jsonl'), key=os.path.getmtime)
-            
-            # Filtramos archivos muy recientes (< 5 min) para evitar leer viejos
-            current_time = time.time()
-            recent_files = [f for f in files if (current_time - os.path.getmtime(f)) < 300]
-
-            if recent_files:
-                last_file = os.path.basename(recent_files[-1])
-                print(f'🏁 JUEGO TERMINADO. Archivo: {{last_file}}', flush=True)
-                time.sleep(2)
-                
-                # Respuesta FINAL (Completed)
-                final_res = {{
-                    "jsonrpc": "2.0", "id": 1, 
-                    "result": {{
-                        "contextId": "ctx", "taskId": "task", "id": "task",
-                        "status": {{"state": "completed"}}, "final": True,
-                        "messageId": "m-done", "role": "assistant", "parts": [{{"text": "Done", "mimeType": "text/plain"}}]
-                    }}
-                }}
-                yield 'data: ' + json.dumps(final_res) + '\\n\\n'
-                break
-            
-            # Latido cada 3 segundos
-            time.sleep(3)
-            yield 'data: ' + json.dumps(base_res) + '\\n\\n'
-
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
-\"\"\"
-
-        # 2. Buscamos donde empieza y termina la funcion antigua dummy_rpc
-        # Usamos expresiones regulares para encontrar el bloque y reemplazarlo
-        # Si no lo encontramos, lo pegamos al final (fallback)
+        # 3. Desactivamos la función dummy_rpc original renombrándola
         if "def dummy_rpc():" in content:
-            # Estrategia simple: Cortar el archivo antes de dummy_rpc y pegar lo nuevo
-            # (Asumimos que dummy_rpc es la ultima funcion o esta cerca del final)
-            parts = content.split("@app.route('/', methods=['POST', 'GET'])")
-            if len(parts) > 1:
-                # Mantenemos la primera parte (imports, config, start_game, etc)
-                # Y pegamos nuestra nueva funcion, ignorando la vieja implementacion
-                new_content = parts[0] + new_rpc_code + "\\n\\n" + "# Old code removed by fix\\n" + "if __name__ == '__main__':" + content.split("if __name__ == '__main__':")[-1]
-                
-                with open('src/green_agent.py', 'w') as f:
-                    f.write(new_content)
-                print("✅ Codigo inyectado correctamente.", flush=True)
-            else:
-                print("⚠️ No se pudo reemplazar limpiamente, usando append...", flush=True)
-        else:
-            print("⚠️ No se encontro dummy_rpc, añadiendo...", flush=True)
+            content = content.replace("def dummy_rpc():", "def old_dummy_rpc_disabled():")
+            content = content.replace("@app.route('/', methods=['POST', 'GET'])", "# Route disabled")
+            
+            # Aseguramos que 'jsonify' esté importado
+            if "from flask import Flask" in content and "jsonify" not in content:
+                content = content.replace("from flask import Flask", "from flask import Flask, jsonify")
 
-        print("🚀 ARRANCANDO SERVIDOR MODIFICADO...", flush=True)
+            # 4. Insertamos nuestra nueva función antes del bloque main
+            if "if __name__" in content:
+                content = content.replace("if __name__", new_rpc_code + "\\n\\nif __name__")
+            else:
+                content += "\\n" + new_rpc_code
+
+            # 5. Guardamos el archivo modificado
+            with open(target_file, 'w') as f:
+                f.write(content)
+            print("✅ Código inyectado correctamente.", flush=True)
+        else:
+            print("⚠️ No se encontró dummy_rpc, el parche podría no funcionar.", flush=True)
+
+        # 6. Arrancamos el servidor normalmente
+        print("🚀 Arrancando Green Agent...", flush=True)
         sys.stdout.flush()
-        # Ejecutamos el servidor
-        os.system("python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}")
+        os.system(f"python -u {{target_file}} --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}")
 
     environment:{green_env}
     healthcheck:
@@ -187,7 +174,8 @@ networks:
     driver: bridge
 """
 
-# 🟢 PLANTILLA PARTICIPANTE: MODO ZOMBI
+# 🟢 PARTICIPANTE (Purple Agent) - MODO ZOMBI
+# "exit 0" en el healthcheck evita que Docker lo mate si tarda en pensar (Turno 3).
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -198,8 +186,7 @@ PARTICIPANT_TEMPLATE = """  {name}:
       green-agent:
         condition: service_healthy
     healthcheck:
-      # Siempre sano para evitar muerte en Turno 3
-      test: ["CMD-SHELL", "exit 0"]
+      test: ["CMD-SHELL", "exit 0"] 
       interval: 10s
       timeout: 5s
       retries: 5
@@ -284,6 +271,7 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
 
     participant_names = [p["name"] for p in participants]
 
+    # Generamos los servicios de los participantes
     participant_services = "\n".join([
         PARTICIPANT_TEMPLATE.format(
             name=p["name"],
@@ -318,6 +306,7 @@ def generate_a2a_scenario(scenario: dict[str, Any]) -> str:
             f"endpoint = \"http://{p['name']}:{DEFAULT_PORT}\"",
         ]
         
+        # 🟢 USAMOS EL ID DEL WEBHOOK SI EXISTE
         if "webhook_id" in p:
              lines.append(f"agentbeats_id = \"{p['webhook_id']}\"")
         elif "agentbeats_id" in p:
@@ -384,7 +373,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL SOURCE CODE PATCH)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (CLEAN VIGILANTE FIX)")
 
 if __name__ == "__main__":
     main()
