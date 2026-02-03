@@ -99,6 +99,11 @@ PARTICIPANT_TEMPLATE = """  {name}:
     container_name: {name}
     command: ["--host", "0.0.0.0", "--port", "{port}", "--card-url", "http://{name}:{port}"]
     environment:{env}
+    #---
+    depends_on:
+      green-agent:
+        condition: service_healthy
+    #---
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:{port}/.well-known/agent-card.json"]
       interval: 5s
