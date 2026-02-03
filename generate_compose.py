@@ -274,27 +274,24 @@ networks:
    driver: bridge
 """
  
-# 🟢 PLANTILLA PARTICIPANTE (Modo Sleep Infinity - Evita Error 143)
-# Sobrescribimos el entrypoint para ejecutar el agente y luego DORMIR.
-# Esto evita que 'abort-on-container-exit' mate al cliente antes de tiempo.
+# 🟢 PLANTILLA PARTICIPANTE (Modo Zombi)
 PARTICIPANT_TEMPLATE = """  {name}:
-    image: {image}
-    platform: linux/amd64
-    container_name: {name}
-    # Forzamos el entrypoint para asegurar que no se cierre
-    entrypoint: ["/bin/sh", "-c", "python -u purple_ai.py --host 0.0.0.0 --port {port} --card-url http://{name}:{port}; echo '✅ FIN AGENTE. DURMIENDO...'; sleep infinity"]
-    environment:{env}
-    depends_on:
-      green-agent:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "exit 0"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    networks:
-      - agent-network
+   image: {image}
+   platform: linux/amd64
+   container_name: {name}
+   command: ["--host", "0.0.0.0", "--port", "{port}", "--card-url", "http://{name}:{port}"]
+   environment:{env}
+   depends_on:
+     green-agent:
+       condition: service_healthy
+   healthcheck:
+     test: ["CMD-SHELL", "exit 0"]
+     interval: 10s
+     timeout: 5s
+     retries: 5
+     start_period: 5s
+   networks:
+     - agent-network
 """
  
 A2A_SCENARIO_TEMPLATE = """[green_agent]
