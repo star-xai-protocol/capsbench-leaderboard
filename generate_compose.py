@@ -111,7 +111,8 @@ def dummy_rpc():
         
         while True:
             # Buscar resultados
-            patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl', 'output/*.json']
+            # patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl', 'output/*.json']
+            patterns = ['results/*.json', 'src/results/*.json', 'output/*.json']
             files = []
             for p in patterns:
                 files.extend(glob.glob(p))
@@ -125,34 +126,14 @@ def dummy_rpc():
                     print(f"✅ [FIN] Detectado: {os.path.basename(last_file)}", flush=True)
                     
                     # Mensaje FINAL (Status: Completed) - Opción 1
-                    # Calculamos ruta absoluta para la URI
-                    abs_path = os.path.abspath(last_file)
-
                     final_msg = {
                         "jsonrpc": "2.0", "id": 1,
                         "result": {
-                            "contextId": "ctx",
-                            "taskId": "task",
-                            "id": "task",
-                            "status": {"state": "completed"},
-                            "final": True,
-                            "messageId": "msg-done",
-                            "role": "assistant",
-                    
-                            # Mensaje humano (opcional)
-                            "parts": [
-                                {"text": "Game Finished", "mimeType": "text/plain"}
-                            ],
-                    
-                            # 🔑 LO QUE EL CLIENTE ITERA
-                            "artifacts": [
-                                {
-                                    "type": "file",
-                                    "uri": "file://" + abs_path,
-                                    "mimeType": "application/jsonl",
-                                    "name": os.path.basename(last_file)
-                                }
-                            ]
+                            "contextId": "ctx", "taskId": "task", "id": "task",
+                            "status": {"state": "completed"}, "final": True,
+                            "messageId": "msg-done", "role": "assistant",
+                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}],
+                            "artifacts": [] 
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
