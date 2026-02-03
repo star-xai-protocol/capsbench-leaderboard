@@ -66,7 +66,7 @@ services:
     command: ["--host", "0.0.0.0", "--port", "{green_port}", "--card-url", "http://green-agent:{green_port}"]
     environment:{green_env}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/.well-known/agent-card.json"]
+      test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
       interval: 5s
       timeout: 3s
       retries: 10
