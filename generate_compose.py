@@ -38,12 +38,12 @@ DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
 
-# --- 🛠️ SCRIPT DE REPARACIÓN (V6 REFINADA + ARTIFACTS) ---
-# Basado en la versión que funcionaba (V6), añadiendo el campo faltante.
+# --- 🛠️ SCRIPT DE REPARACIÓN MAESTRO (V6 - STREAMING SSE) ---
+# Se ejecuta DENTRO del contenedor.
 FIX_SCRIPT_SOURCE = r"""
 import sys, os, re, json, time, glob
 
-print("🔧 [FIX] Iniciando reparación del servidor (V6 + Artifacts)...", flush=True)
+print("🔧 [FIX] Iniciando reparación del servidor (Modo Streaming SSE)...", flush=True)
 
 target_file = 'src/green_agent.py'
 if not os.path.exists(target_file):
@@ -56,16 +56,17 @@ if not os.path.exists(target_file):
 with open(target_file, 'r') as f:
     content = f.read()
 
-# === 1. IMPORTS ===
+# === 1. ASEGURAR IMPORTS (CRÍTICO: Response, stream_with_context) ===
 if "import time" not in content:
     content = "import time, glob, os, json\n" + content
+
+# Reemplazamos la importación de Flask para incluir todo lo necesario para Streaming
 if "from flask import Flask" in content:
     content = content.replace("from flask import Flask", "from flask import Flask, jsonify, request, Response, stream_with_context")
 else:
     content = "from flask import Flask, jsonify, request, Response, stream_with_context\n" + content
 
-# === 2. AGENT CARD (COMPLETA Y VÁLIDA) ===
-# Incluye todos los campos requeridos por Pydantic.
+# === 2. AGENT CARD (Ya funciona, la mantenemos igual) ===
 agent_card_route = r'''
 @app.route("/.well-known/agent-card.json", methods=["GET"])
 def agent_card_fix():
@@ -84,8 +85,8 @@ def agent_card_fix():
     })
 '''
 
-# === 3. DUMMY RPC (STREAMING + ARTIFACTS) ===
-# Fix: Añadido "artifacts": [] para evitar TypeError en el cliente.
+# === 3. NUEVA dummy_rpc con STREAMING REAL (text/event-stream) ===
+# Usamos yield para enviar datos poco a poco. Esto satisface al cliente SSE.
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
@@ -93,16 +94,17 @@ def dummy_rpc():
     
     def generate():
         # 1. Latido inicial (Status: Working)
+        # Mantiene al cliente feliz mientras esperamos.
         base_msg = {
             "jsonrpc": "2.0", "id": 1,
             "result": {
                 "contextId": "ctx", "taskId": "task", "id": "task",
                 "status": {"state": "working"}, "final": False,
                 "messageId": "msg-alive", "role": "assistant",
-                "parts": [{"text": "Game running...", "mimeType": "text/plain"}],
-                "artifacts": []  # <--- FIX: Campo añadido
+                "parts": [{"text": "Game running...", "mimeType": "text/plain"}]
             }
         }
+        # Formato SSE: "data: <json>\n\n"
         yield "data: " + json.dumps(base_msg) + "\n\n"
         
         start_time = time.time()
@@ -120,8 +122,7 @@ def dummy_rpc():
                 
                 # Si encontramos un resultado reciente
                 if (time.time() - os.path.getmtime(last_file)) < 600:
-                    filename = os.path.basename(last_file)
-                    print(f"✅ [FIN] Detectado: {filename}", flush=True)
+                    print(f"✅ [FIN] Detectado: {os.path.basename(last_file)}", flush=True)
                     
                     # Mensaje FINAL (Status: Completed)
                     final_msg = {
@@ -130,8 +131,7 @@ def dummy_rpc():
                             "contextId": "ctx", "taskId": "task", "id": "task",
                             "status": {"state": "completed"}, "final": True,
                             "messageId": "msg-done", "role": "assistant",
-                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}],
-                            "artifacts": [] # <--- FIX: Campo añadido
+                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}]
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
@@ -142,9 +142,10 @@ def dummy_rpc():
                 break
                 
             time.sleep(2)
-            # Enviar latido
+            # Enviar latido para mantener conexión viva
             yield "data: " + json.dumps(base_msg) + "\n\n"
 
+    # Retornamos una respuesta con el mimetype correcto para SSE
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 '''
 
@@ -163,7 +164,7 @@ else:
 with open(target_file, 'w') as f:
     f.write(content)
 
-print("✅ Servidor parcheado (V6 + Artifacts). Arrancando...", flush=True)
+print("✅ Servidor parcheado (SSE Streaming). Arrancando...", flush=True)
 sys.stdout.flush()
 os.execvp("python", ["python", "-u", target_file] + sys.argv[1:])
 """
@@ -399,7 +400,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL ARTIFACTS FIX)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL STREAMING FIX)")
 
 if __name__ == "__main__":
     main()
