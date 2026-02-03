@@ -38,12 +38,13 @@ DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
 
-# --- 🛠️ SCRIPT DE REPARACIÓN MAESTRO (V6 - STREAMING SSE) ---
-# Se ejecuta DENTRO del contenedor.
+# --- 🛠️ SCRIPT DE REPARACIÓN (V8 - LOGIC FIX) ---
+# CAMBIO CRÍTICO: Eliminamos 'replays/*.jsonl' de la búsqueda para evitar
+# que detecte el inicio del juego como el final.
 FIX_SCRIPT_SOURCE = r"""
 import sys, os, re, json, time, glob
 
-print("🔧 [FIX] Iniciando reparación del servidor (Modo Streaming SSE)...", flush=True)
+print("🔧 [FIX] Iniciando reparación del servidor (V8 - Logic Fix)...", flush=True)
 
 target_file = 'src/green_agent.py'
 if not os.path.exists(target_file):
@@ -56,17 +57,15 @@ if not os.path.exists(target_file):
 with open(target_file, 'r') as f:
     content = f.read()
 
-# === 1. ASEGURAR IMPORTS (CRÍTICO: Response, stream_with_context) ===
+# === 1. IMPORTS ===
 if "import time" not in content:
     content = "import time, glob, os, json\n" + content
-
-# Reemplazamos la importación de Flask para incluir todo lo necesario para Streaming
 if "from flask import Flask" in content:
     content = content.replace("from flask import Flask", "from flask import Flask, jsonify, request, Response, stream_with_context")
 else:
     content = "from flask import Flask, jsonify, request, Response, stream_with_context\n" + content
 
-# === 2. AGENT CARD (Ya funciona, la mantenemos igual) ===
+# === 2. AGENT CARD ===
 agent_card_route = r'''
 @app.route("/.well-known/agent-card.json", methods=["GET"])
 def agent_card_fix():
@@ -85,33 +84,32 @@ def agent_card_fix():
     })
 '''
 
-# === 3. NUEVA dummy_rpc con STREAMING REAL (text/event-stream) ===
-# Usamos yield para enviar datos poco a poco. Esto satisface al cliente SSE.
+# === 3. RPC VIGILANTE (CORREGIDO) ===
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
-    print("🔒 [STREAM] Cliente conectado. Iniciando streaming...", flush=True)
+    print("🔒 [STREAM] Cliente conectado. Esperando resultados finales...", flush=True)
     
     def generate():
-        # 1. Latido inicial (Status: Working)
-        # Mantiene al cliente feliz mientras esperamos.
+        # Latido inicial
         base_msg = {
             "jsonrpc": "2.0", "id": 1,
             "result": {
                 "contextId": "ctx", "taskId": "task", "id": "task",
                 "status": {"state": "working"}, "final": False,
                 "messageId": "msg-alive", "role": "assistant",
-                "parts": [{"text": "Game running...", "mimeType": "text/plain"}]
+                "parts": [{"text": "Game running...", "mimeType": "text/plain"}],
+                "artifacts": []
             }
         }
-        # Formato SSE: "data: <json>\n\n"
         yield "data: " + json.dumps(base_msg) + "\n\n"
         
         start_time = time.time()
         
         while True:
-            # Buscar resultados
-            patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl', 'output/*.json']
+            # FIX CRÍTICO: Solo buscamos JSONs de RESULTADOS (summary o results)
+            # NO buscamos .jsonl porque esos se crean al principio y causan falsos positivos.
+            patterns = ['results/*.json', 'src/results/*.json', 'output/results.json']
             files = []
             for p in patterns:
                 files.extend(glob.glob(p))
@@ -120,51 +118,50 @@ def dummy_rpc():
                 files.sort(key=os.path.getmtime, reverse=True)
                 last_file = files[0]
                 
-                # Si encontramos un resultado reciente
+                # Si el archivo es reciente (< 10 min)
                 if (time.time() - os.path.getmtime(last_file)) < 600:
-                    print(f"✅ [FIN] Detectado: {os.path.basename(last_file)}", flush=True)
+                    print(f"✅ [FIN] Resultado final detectado: {os.path.basename(last_file)}", flush=True)
                     
-                    # Mensaje FINAL (Status: Completed)
                     final_msg = {
                         "jsonrpc": "2.0", "id": 1,
                         "result": {
                             "contextId": "ctx", "taskId": "task", "id": "task",
                             "status": {"state": "completed"}, "final": True,
                             "messageId": "msg-done", "role": "assistant",
-                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}]
+                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}],
+                            "artifacts": []
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
                     break
             
+            # Timeout 30 min
             if time.time() - start_time > 1800:
                 print("⏰ Timeout", flush=True)
                 break
                 
-            time.sleep(2)
-            # Enviar latido para mantener conexión viva
+            time.sleep(3)
             yield "data: " + json.dumps(base_msg) + "\n\n"
 
-    # Retornamos una respuesta con el mimetype correcto para SSE
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 '''
 
-# === 4. DESACTIVAR RUTAS ANTIGUAS ===
+# === 4. LIMPIEZA ===
 content = re.sub(r"@app\.route\s*\(\s*['\"]/['\"]", "# @app.route('/'", content)
 content = re.sub(r"@app\.route\s*\(\s*['\"]/\.well-known/agent-card\.json['\"]", "# @app.route('/card'", content)
 
-# === 5. INYECTAR CÓDIGO ===
+# === 5. INYECCIÓN ===
 if "if __name__" in content:
     parts = content.split("if __name__")
     content = "".join(parts[:-1]) + "\n" + agent_card_route + "\n" + new_dummy_rpc + "\n\nif __name__" + parts[-1]
 else:
     content += "\n" + agent_card_route + "\n" + new_dummy_rpc
 
-# === 6. GUARDAR Y EJECUTAR ===
+# === 6. EJECUCIÓN ===
 with open(target_file, 'w') as f:
     f.write(content)
 
-print("✅ Servidor parcheado (SSE Streaming). Arrancando...", flush=True)
+print("✅ Servidor parcheado (V8). Arrancando...", flush=True)
 sys.stdout.flush()
 os.execvp("python", ["python", "-u", target_file] + sys.argv[1:])
 """
@@ -400,7 +397,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL STREAMING FIX)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (V8: LOGIC CORRECTED)")
 
 if __name__ == "__main__":
     main()
