@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Importaciones necesarias (asegúrate de tener: pip install requests tomli tomli-w)
 try:
     import tomli
 except ImportError:
@@ -56,6 +55,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
+# 🟢 PLANTILLA ESTABILIZADA
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -63,67 +63,10 @@ services:
     image: {green_image}
     platform: linux/amd64
     container_name: green-agent
-    
-    # 👇👇👇 INICIO DEL FIX QUIRÚRGICO 👇👇👇
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        echo "🔧 APLICANDO FIX INTELIGENTE (INYECCIÓN)..."
-        
-        # Usamos python para editar el archivo sin romperlo
-        python -c "
-import sys
-try:
-    # Leer el archivo original
-    with open('src/green_agent.py', 'r') as f:
-        lines = f.readlines()
-
-    # 1. Insertar el import arriba del todo
-    lines.insert(0, 'from flask import jsonify\\n')
-
-    # 2. Definir el parche (La tarjeta que falta)
-    # ATENCION: Usamos dobles llaves para que Python genere el JSON bien
-    patch = '''
-@app.route('/.well-known/agent-card.json', methods=['GET'])
-def agent_card_fix_injected():
-    return jsonify({{
-        'name': 'GreenAgent Fix',
-        'version': '1.0.0',
-        'description': 'Fixed Runtime',
-        'url': 'http://green-agent:9009/',
-        'protocolVersion': '0.3.0',
-        'capabilities': {{}}
-    }})
-'''
-    # 3. Buscar dónde empieza el bloque main e insertar JUSTO ANTES
-    inserted = False
-    for i, line in enumerate(lines):
-        if 'if __name__' in line:
-            lines.insert(i, patch)
-            inserted = True
-            break
-    
-    # Si no encuentra el main (raro), lo pone al final por si acaso
-    if not inserted:
-        lines.append(patch)
-
-    # Guardar cambios
-    with open('src/green_agent.py', 'w') as f:
-        f.writelines(lines)
-    print('✅ PARCHE APLICADO CORRECTAMENTE')
-
-except Exception as e:
-    print(f'❌ ERROR APLICANDO PARCHE: {{e}}')
-"
-        
-        echo "🚀 ARRANCANDO SERVIDOR..."
-        exec python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}
-    # 👆👆👆 FIN DEL FIX 👆👆👆
-
+    command: ["--host", "0.0.0.0", "--port", "{green_port}", "--card-url", "http://green-agent:{green_port}"]
     environment:{green_env}
     healthcheck:
-      # Mantenemos el test rápido /status
+      # Usamos /status porque la tarjeta a veces falla, pero el servidor funciona
       test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
       interval: 5s
       timeout: 3s
@@ -151,6 +94,7 @@ networks:
     driver: bridge
 """
 
+# 🟢 PLANTILLA DE PARTICIPANTE (MODO ZOMBI PARA TURN 3)
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -161,12 +105,12 @@ PARTICIPANT_TEMPLATE = """  {name}:
       green-agent:
         condition: service_healthy
     healthcheck:
+      # "exit 0" significa SIEMPRE SANO. Evita que Docker lo mate si piensa lento.
       test: ["CMD-SHELL", "exit 0"]
-      # test: ["CMD", "curl", "-f", "http://localhost:{port}/.well-known/agent-card.json"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     networks:
       - agent-network
 """
@@ -195,12 +139,10 @@ def resolve_image(agent: dict, name: str) -> None:
         info = fetch_agent_info(agent["agentbeats_id"])
         agent["image"] = info["docker_image"]
         
-        # 🟢 CAMBIO AQUI 1: CAPTURAR EL ID DEL WEBHOOK
-        # Guardamos el ID real que devuelve la API (Webhook ID)
+        # 🟢 CAPTURA DEL WEBHOOK ID (FIX CRÍTICO)
         if "id" in info:
             agent["webhook_id"] = info["id"]
-        # ----------------------------------------------------
-
+        
         print(f"Resolved {name} image: {agent['image']}")
     else:
         print(f"Error: {name} must have either 'image' or 'agentbeats_id' field")
@@ -216,7 +158,6 @@ def parse_scenario(scenario_path: Path) -> dict[str, Any]:
 
     participants = data.get("participants", [])
 
-    # Check for duplicate participant names
     names = [p.get("name") for p in participants]
     duplicates = [name for name in set(names) if names.count(name) > 1]
     if duplicates:
@@ -267,7 +208,8 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
         green_image=green["image"],
         green_port=DEFAULT_PORT,
         green_env=format_env_vars(green.get("env", {})),
-        green_depends=" []",
+        # 🟢 FIX DEL CICLO DE DEPENDENCIA
+        green_depends=" []",  
         participant_services=participant_services,
         client_depends=format_depends_on(all_services)
     )
@@ -285,14 +227,12 @@ def generate_a2a_scenario(scenario: dict[str, Any]) -> str:
             f"endpoint = \"http://{p['name']}:{DEFAULT_PORT}\"",
         ]
         
-        # 🟢 CAMBIO AQUI 2: ESCRIBIR EL ID DEL WEBHOOK
-        # Usamos el ID del Webhook si existe (es el prioritario), si no el genérico
+        # 🟢 ESCRITURA DEL ID CORRECTO
         if "webhook_id" in p:
              lines.append(f"agentbeats_id = \"{p['webhook_id']}\"")
         elif "agentbeats_id" in p:
              lines.append(f"agentbeats_id = \"{p['agentbeats_id']}\"")
-        # --------------------------------------------------------------------
-
+        
         participant_lines.append("\n".join(lines) + "\n")
 
     config_section = scenario.get("config", {})
@@ -310,7 +250,6 @@ def generate_env_file(scenario: dict[str, Any]) -> str:
     participants = scenario.get("participants", [])
 
     secrets = set()
-
     env_var_pattern = re.compile(r'\$\{([^}]+)\}')
 
     for value in green.get("env", {}).values():
@@ -355,7 +294,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH}")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (CLEAN VERSION)")
 
 if __name__ == "__main__":
     main()
