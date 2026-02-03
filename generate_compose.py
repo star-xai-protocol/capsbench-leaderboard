@@ -55,7 +55,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 PLANTILLA SERVIDOR: FIX COMPLETO (ROOT + CARD)
+# 🟢 PLANTILLA SERVIDOR: FIX PROTOCOLO ESTRICTO
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -64,7 +64,7 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX DE RED: Inyectamos rutas falsas que cumplen el protocolo
+    # 👇 FIX DE RED: Inyectamos respuestas que pasan la validación estricta de Pydantic
     entrypoint:
       - /bin/sh
       - -c
@@ -75,11 +75,11 @@ services:
         sed -i 's/from flask import Flask/from flask import Flask, jsonify/' src/green_agent.py
         
         # 2. Inyectamos:
-        #    - /agent-card.json (Tarjeta de identidad completa)
-        #    - / (Ruta raíz que simula una tarea en ejecución para que el cliente espere)
+        #    - /agent-card.json (Tarjeta completa)
+        #    - / (Ruta raíz con estado "working" y mensaje dummy para satisfacer al cliente)
         
-        # ATENCION: El JSON de 'root_fix' incluye contextId, taskId y status para que el cliente no falle.
-        sed -i '/if __name__/i @app.route("/.well-known/agent-card.json")\\ndef card_fix(): return jsonify({{"name":"GreenFix","version":"1.0","description":"Fix","url":"http://green-agent:9009/","protocolVersion":"0.3.0","capabilities":{{}},"defaultInputModes":["text"],"defaultOutputModes":["text"],"skills":[]}})\\n\\n@app.route("/", methods=["GET", "POST"])\\ndef root_fix(): return jsonify({{"jsonrpc": "2.0", "id": 1, "result": {{"contextId": "game-ctx", "taskId": "game-task", "id": "game-task", "status": {{"state": "running"}}, "final": False}}}})' src/green_agent.py
+        # ATENCION: JSON Blindado para Pydantic (state: working, messageId, parts...)
+        sed -i '/if __name__/i @app.route("/.well-known/agent-card.json")\\ndef card_fix(): return jsonify({{"name":"GreenFix","version":"1.0","description":"Fix","url":"http://green-agent:9009/","protocolVersion":"0.3.0","capabilities":{{}},"defaultInputModes":["text"],"defaultOutputModes":["text"],"skills":[]}})\\n\\n@app.route("/", methods=["GET", "POST"])\\ndef root_fix(): return jsonify({{"jsonrpc": "2.0", "id": 1, "result": {{"contextId": "ctx", "taskId": "task", "status": {{"state": "working"}}, "final": False, "message": {{"messageId": "msg-1", "role": "assistant", "parts": [{{"text": "thinking...", "mimeType": "text/plain"}}]}}}}}})' src/green_agent.py
         
         echo "🚀 ARRANCANDO SERVIDOR..."
         exec python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}
@@ -114,7 +114,6 @@ networks:
 """
 
 # 🟢 PLANTILLA PARTICIPANTE: MODO ZOMBI
-# CORREGIDO: Ya no usa {green_port} para evitar el KeyError
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -212,7 +211,6 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
     participant_names = [p["name"] for p in participants]
 
     # Generamos los servicios de los participantes
-    # CORREGIDO: Ya no pasamos 'green_port' aquí porque la plantilla no lo usa
     participant_services = "\n".join([
         PARTICIPANT_TEMPLATE.format(
             name=p["name"],
@@ -315,7 +313,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL FIXED VERSION)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (STRICT PROTOCOL FIX)")
 
 if __name__ == "__main__":
     main()
