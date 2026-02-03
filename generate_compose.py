@@ -38,12 +38,13 @@ DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
 
-# --- 🛠️ SCRIPT DE REPARACIÓN MAESTRO (V6 - STREAMING SSE) ---
+# --- 🛠️ SCRIPT DE REPARACIÓN MAESTRO (V6 + ARTIFACTS FIX) ---
 # Se ejecuta DENTRO del contenedor.
+# ES EL MISMO CÓDIGO QUE ENVIASTE, SOLO CON EL CAMPO 'artifacts' AÑADIDO.
 FIX_SCRIPT_SOURCE = r"""
 import sys, os, re, json, time, glob
 
-print("🔧 [FIX] Iniciando reparación del servidor (Modo Streaming SSE)...", flush=True)
+print("🔧 [FIX] Iniciando reparación del servidor (Modo Streaming SSE + Artifacts)...", flush=True)
 
 target_file = 'src/green_agent.py'
 if not os.path.exists(target_file):
@@ -66,7 +67,7 @@ if "from flask import Flask" in content:
 else:
     content = "from flask import Flask, jsonify, request, Response, stream_with_context\n" + content
 
-# === 2. AGENT CARD (Ya funciona, la mantenemos igual) ===
+# === 2. AGENT CARD (Igual que V6 - Funcionaba) ===
 agent_card_route = r'''
 @app.route("/.well-known/agent-card.json", methods=["GET"])
 def agent_card_fix():
@@ -85,8 +86,7 @@ def agent_card_fix():
     })
 '''
 
-# === 3. NUEVA dummy_rpc con STREAMING REAL (text/event-stream) ===
-# Usamos yield para enviar datos poco a poco. Esto satisface al cliente SSE.
+# === 3. NUEVA dummy_rpc (V6 + ARTIFACTS) ===
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
@@ -94,14 +94,14 @@ def dummy_rpc():
     
     def generate():
         # 1. Latido inicial (Status: Working)
-        # Mantiene al cliente feliz mientras esperamos.
         base_msg = {
             "jsonrpc": "2.0", "id": 1,
             "result": {
                 "contextId": "ctx", "taskId": "task", "id": "task",
                 "status": {"state": "working"}, "final": False,
                 "messageId": "msg-alive", "role": "assistant",
-                "parts": [{"text": "Game running...", "mimeType": "text/plain"}]
+                "parts": [{"text": "Game running...", "mimeType": "text/plain"}],
+                "artifacts": []  # <--- FIX AÑADIDO AQUÍ
             }
         }
         # Formato SSE: "data: <json>\n\n"
@@ -110,7 +110,7 @@ def dummy_rpc():
         start_time = time.time()
         
         while True:
-            # Buscar resultados
+            # Buscar resultados (Lógica V6 original)
             patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl', 'output/*.json']
             files = []
             for p in patterns:
@@ -131,7 +131,8 @@ def dummy_rpc():
                             "contextId": "ctx", "taskId": "task", "id": "task",
                             "status": {"state": "completed"}, "final": True,
                             "messageId": "msg-done", "role": "assistant",
-                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}]
+                            "parts": [{"text": "Game Finished", "mimeType": "text/plain"}],
+                            "artifacts": []  # <--- FIX AÑADIDO AQUÍ
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
@@ -164,7 +165,7 @@ else:
 with open(target_file, 'w') as f:
     f.write(content)
 
-print("✅ Servidor parcheado (SSE Streaming). Arrancando...", flush=True)
+print("✅ Servidor parcheado (V6 + Artifacts). Arrancando...", flush=True)
 sys.stdout.flush()
 os.execvp("python", ["python", "-u", target_file] + sys.argv[1:])
 """
@@ -400,7 +401,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL STREAMING FIX)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (FINAL ARTIFACTS FIX)")
 
 if __name__ == "__main__":
     main()
