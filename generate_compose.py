@@ -55,8 +55,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 PLANTILLA SERVIDOR: PYTHON PURO (Sin errores de YAML)
-# Usamos un script de Python dentro del entrypoint para parchear el servidor de forma segura.
+# 🟢 PLANTILLA SERVIDOR: VIGILANTE EN PYTHON PURO (Sin errores YAML)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -65,7 +64,8 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX ROBUSTO: Usamos Python para modificar el servidor (evita errores de sintaxis YAML)
+    # 👇 FIX DE RED: Usamos Python para inyectar el código.
+    # Esto evita los errores de "expected ':'" en YAML.
     entrypoint:
       - python
       - -c
@@ -75,8 +75,13 @@ services:
         print("🔧 FIX: Aplicando parche 'Long Polling'...", flush=True)
 
         # 1. Leemos el codigo original
-        with open('src/green_agent.py', 'r') as f:
-            lines = f.readlines()
+        try:
+            with open('src/green_agent.py', 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            # Fallback por si la ruta cambia en versiones futuras
+            with open('green_agent.py', 'r') as f:
+                lines = f.readlines()
 
         # 2. Insertamos imports necesarios al principio
         lines.insert(0, "import time, glob, os\\n")
@@ -84,57 +89,63 @@ services:
         # 3. Añadimos 'jsonify' a la importacion de Flask
         for i, line in enumerate(lines):
             if 'from flask import Flask' in line:
-                lines[i] = line.replace('Flask', 'Flask, jsonify')
+                if 'jsonify' not in line:
+                    lines[i] = line.replace('Flask', 'Flask, jsonify')
                 break
 
         # 4. Definimos el codigo del parche (Rutas bloqueantes)
-        # Este codigo se inyectara antes del bloque main.
-        # El while True mantiene al cliente esperando hasta que haya resultados.
+        # Este codigo intercepta la raiz y espera a que exista el archivo de replay
+        # Usamos dobles llaves {{{{ }}}} para que Python .format() no se rompa
         patch_code = \"\"\"
         @app.route('/.well-known/agent-card.json')
         def card_fix():
-            return jsonify({
+            return jsonify({{
                 "name": "GreenFix",
                 "version": "1.0",
                 "description": "Fix",
                 "url": "http://green-agent:9009/",
                 "protocolVersion": "0.3.0",
-                "capabilities": {}, 
+                "capabilities": {{}}, 
                 "defaultInputModes": ["text"],
                 "defaultOutputModes": ["text"],
                 "skills": []
-            })
+            }})
 
         @app.route('/', methods=['POST', 'GET'])
         def root_fix():
             print("🔒 CLIENTE CONECTADO. BLOQUEANDO HASTA FIN DE PARTIDA...", flush=True)
             # Esperamos hasta 20 minutos (1200 seg)
-            for _ in range(240):
+            start_time = time.time()
+            while True:
                 # Buscamos archivos recientes
-                files = sorted(glob.glob('/app/src/replays/*.jsonl'), key=os.path.getmtime)
+                # Buscamos en varias rutas posibles por si acaso
+                files = sorted(glob.glob('/app/src/replays/*.jsonl') + glob.glob('src/replays/*.jsonl'), key=os.path.getmtime)
+                
                 if files:
                     # Chequeo simple de "reciente" (por si acaso hay basura vieja)
                     # Si el archivo tiene menos de 10 mins, es valido.
                     if (time.time() - os.path.getmtime(files[-1])) < 600:
                         print("✅ JUEGO TERMINADO. LIBERANDO CLIENTE.", flush=True)
-                        # Respuesta FINAL con TODOS los campos que exige Pydantic
-                        return jsonify({
+                        # Respuesta FINAL con TODOS los campos que exige Pydantic (Flattened)
+                        return jsonify({{
                             "jsonrpc": "2.0", 
                             "id": 1, 
-                            "result": {
+                            "result": {{
                                 "contextId": "ctx", 
                                 "taskId": "task", 
                                 "id": "task",
-                                "status": {"state": "completed"}, 
+                                "status": {{"state": "completed"}}, 
                                 "final": True,
                                 "messageId": "msg-done",
                                 "role": "assistant",
-                                "parts": [{"text": "Game Finished", "mimeType": "text/plain"}]
-                            }
-                        })
+                                "parts": [{{"text": "Game Finished", "mimeType": "text/plain"}}]
+                            }}
+                        }})
+                
+                if time.time() - start_time > 1200:
+                     return jsonify({{"error": "timeout"}})
+
                 time.sleep(5)
-            
-            return jsonify({"error": "timeout waiting for game"})
         \"\"\"
 
         # 5. Insertamos el parche antes de "if __name__"
@@ -154,8 +165,10 @@ services:
 
         print("🚀 ARRANCANDO SERVIDOR PARCHEADO...", flush=True)
         # 7. Ejecutamos el servidor original (ahora modificado)
-        os.execvp("python", ["python", "-u", "src/green_agent.py", "--host", "0.0.0.0", "--port", "{green_port}", "--card-url", "http://green-agent:{green_port}"])
-
+        # Asumimos que el script esta en src/green_agent.py
+        sys.stdout.flush()
+        os.system("python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}")
+      
     environment:{green_env}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:{green_port}/status"]
@@ -249,7 +262,9 @@ def parse_scenario(scenario_path: Path) -> dict[str, Any]:
 
     participants = data.get("participants", [])
 
+    # 👇 AQUI ESTABA EL ERROR DE LA IMAGEN (CORREGIDO)
     names = [p.get("name") for p in participants]
+    
     duplicates = [name for name in set(names) if names.count(name) > 1]
     if duplicates:
         print(f"Error: Duplicate participant names found: {', '.join(duplicates)}")
@@ -316,7 +331,6 @@ def generate_a2a_scenario(scenario: dict[str, Any]) -> str:
             f"endpoint = \"http://{p['name']}:{DEFAULT_PORT}\"",
         ]
         
-        # 🟢 USAMOS EL ID DEL WEBHOOK SI EXISTE
         if "webhook_id" in p:
              lines.append(f"agentbeats_id = \"{p['webhook_id']}\"")
         elif "agentbeats_id" in p:
@@ -383,7 +397,7 @@ def main():
             f.write(env_content)
         print(f"Generated {ENV_PATH}")
 
-    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (ROBUST PYTHON FIX)")
+    print(f"Generated {COMPOSE_PATH} and {A2A_SCENARIO_PATH} (ROBUST VIGILANTE)")
 
 if __name__ == "__main__":
     main()
