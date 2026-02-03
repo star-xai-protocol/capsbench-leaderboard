@@ -55,7 +55,7 @@ ENV_PATH = ".env.example"
 DEFAULT_PORT = 9009
 DEFAULT_ENV_VARS = {"PYTHONUNBUFFERED": "1"}
 
-# 🟢 PLANTILLA SERVIDOR: Mantiene el fix del 404 para el cliente
+# 🟢 PLANTILLA SERVIDOR: FIX 404 COMPLETO (ROOT + CARD)
 COMPOSE_TEMPLATE = """# Auto-generated from scenario.toml
 
 services:
@@ -64,18 +64,25 @@ services:
     platform: linux/amd64
     container_name: green-agent
     
-    # 👇 FIX 404: Inyectamos la tarjeta de identidad usando SED
+    # 👇 FIX DE CONEXIÓN: Inyectamos rutas faltantes (Card y Root)
     entrypoint:
       - /bin/sh
       - -c
       - |
-        echo "🔧 FIX: Inyectando ruta agent-card.json..."
-        # 1. Importar jsonify
+        echo "🔧 FIX: Aplicando parches de red..."
+        
+        # 1. Si existe una ruta raíz original, la movemos para que no moleste
+        sed -i "s|@app.route('/',|@app.route('/legacy_root',|g" src/green_agent.py
+        sed -i "s|@app.route(\"/\",|@app.route('/legacy_root',|g" src/green_agent.py
+
+        # 2. Importar jsonify
         sed -i 's/from flask import Flask/from flask import Flask, jsonify/' src/green_agent.py
         
-        # 2. Inyectar la ruta con TODOS los campos requeridos
-        # ATENCION: Las dobles llaves {{{{ }}}} son obligatorias aquí para Python
-        sed -i '/if __name__/i @app.route("/.well-known/agent-card.json")\\ndef card_fix(): return jsonify({{"name":"GreenFix","version":"1.0","description":"Fix","url":"http://green-agent:9009/","protocolVersion":"0.3.0","capabilities":{{}},"defaultInputModes":["text"],"defaultOutputModes":["text"],"skills":[]}})' src/green_agent.py
+        # 3. Inyectar:
+        #    a) Ruta de Tarjeta (agent-card.json) con todos los campos
+        #    b) Ruta Raíz (/) para aceptar el POST del cliente sin dar 404
+        # ATENCIÓN: Dobles llaves {{{{ }}}} para escapar en Python
+        sed -i '/if __name__/i @app.route("/.well-known/agent-card.json")\\ndef card_fix(): return jsonify({{"name":"GreenFix","version":"1.0","description":"Fix","url":"http://green-agent:9009/","protocolVersion":"0.3.0","capabilities":{{}},"defaultInputModes":["text"],"defaultOutputModes":["text"],"skills":[]}})\\n\\n@app.route("/", methods=["GET", "POST"])\\ndef root_fix(): return jsonify({{"jsonrpc": "2.0", "result": {{"status": "running"}}, "id": 1}})' src/green_agent.py
         
         echo "🚀 ARRANCANDO SERVIDOR..."
         exec python -u src/green_agent.py --host 0.0.0.0 --port {green_port} --card-url http://green-agent:{green_port}
@@ -110,7 +117,6 @@ networks:
 """
 
 # 🟢 PLANTILLA PARTICIPANTE: MODO ZOMBI
-# IMPORTANTE: No usamos {green_port} aquí para evitar el KeyError
 PARTICIPANT_TEMPLATE = """  {name}:
     image: {image}
     platform: linux/amd64
@@ -121,8 +127,7 @@ PARTICIPANT_TEMPLATE = """  {name}:
       green-agent:
         condition: service_healthy
     healthcheck:
-      # "exit 0" significa SIEMPRE SANO.
-      # Esto evita que Docker mate al agente si tarda mucho en pensar.
+      # Evita muerte en Turno 3
       test: ["CMD-SHELL", "exit 0"]
       interval: 10s
       timeout: 5s
@@ -208,8 +213,6 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
 
     participant_names = [p["name"] for p in participants]
 
-    # Generamos los servicios de los participantes
-    # NOTA: Ya no usamos 'green_port' aquí, por lo que el KeyError desaparecerá.
     participant_services = "\n".join([
         PARTICIPANT_TEMPLATE.format(
             name=p["name"],
