@@ -174,4 +174,81 @@ def parse_scenario(scenario_path: Path) -> dict[str, Any]:
 
     participants = data.get("participants", [])
 
-    names = [p.get("name") for p in
+    names = [p.get("name") for p in participants]
+    duplicates = [name for name in set(names) if names.count(name) > 1]
+    if duplicates:
+        print(f"Error: Duplicate participant names found: {', '.join(duplicates)}")
+        print("Each participant must have a unique name.")
+        sys.exit(1)
+
+    for participant in participants:
+        name = participant.get("name", "unknown")
+        resolve_image(participant, f"participant '{name}'")
+
+    return data
+
+
+def format_env_vars(env_dict: dict[str, Any]) -> str:
+    env_vars = {**DEFAULT_ENV_VARS, **env_dict}
+    lines = [f"      - {key}={value}" for key, value in env_vars.items()]
+    return "\n" + "\n".join(lines)
+
+
+def format_depends_on(services: list) -> str:
+    lines = []
+    for service in services:
+        lines.append(f"      {service}:")
+        lines.append(f"        condition: service_healthy")
+    return "\n" + "\n".join(lines)
+
+
+def generate_docker_compose(scenario: dict[str, Any]) -> str:
+    green = scenario["green_agent"]
+    participants = scenario.get("participants", [])
+
+    participant_names = [p["name"] for p in participants]
+
+    participant_services = "\n".join([
+        PARTICIPANT_TEMPLATE.format(
+            name=p["name"],
+            image=p["image"],
+            port=DEFAULT_PORT,
+            env=format_env_vars(p.get("env", {}))
+        )
+        for p in participants
+    ])
+
+    all_services = ["green-agent"] + participant_names
+
+    return COMPOSE_TEMPLATE.format(
+        green_image=green["image"],
+        green_port=DEFAULT_PORT,
+        green_env=format_env_vars(green.get("env", {})),
+        # 🟢 IMPORTANTE: Lista vacía para romper el ciclo de dependencias
+        green_depends=" []",  
+        participant_services=participant_services,
+        client_depends=format_depends_on(all_services)
+    )
+
+
+def generate_a2a_scenario(scenario: dict[str, Any]) -> str:
+    green = scenario["green_agent"]
+    participants = scenario.get("participants", [])
+
+    participant_lines = []
+    for p in participants:
+        lines = [
+            f"[[participants]]",
+            f"role = \"{p['name']}\"",
+            f"endpoint = \"http://{p['name']}:{DEFAULT_PORT}\"",
+        ]
+        
+        # 🟢 USAMOS EL ID DEL WEBHOOK
+        if "webhook_id" in p:
+             lines.append(f"agentbeats_id = \"{p['webhook_id']}\"")
+        elif "agentbeats_id" in p:
+             lines.append(f"agentbeats_id = \"{p['agentbeats_id']}\"")
+        
+        participant_lines.append("\n".join(lines) + "\n")
+
+    config
