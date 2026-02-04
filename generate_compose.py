@@ -112,7 +112,18 @@ def dummy_rpc():
         while True:
             # Buscar resultados
             # patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl', 'output/*.json']
-            patterns = ['results/*.json', 'src/results/*.json', 'output/*.json']
+            # patterns = ['results/*.json', 'src/results/*.json', 'output/*.json']
+            patterns = [
+                '/app/src/results/*.json', 
+                '/app/results/*.json', 
+                '/app/output/*.json',
+                '/app/*.json',
+                'src/results/*.json',
+                'replays/*.jsonl',
+                'src/replays/*.jsonl',
+                'results/*.json',
+                'output/*.json'
+            ]
             files = []
             for p in patterns:
                 files.extend(glob.glob(p))
