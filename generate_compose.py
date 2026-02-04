@@ -85,76 +85,103 @@ def agent_card_fix():
     })
 '''
 
-# === 3. NUEVA dummy_rpc con STREAMING REAL (text/event-stream) ===
-# Usamos yield para enviar datos poco a poco. Esto satisface al cliente SSE.
+# === 3. NUEVA dummy_rpc (ESTILO WEREWOLF/CRYPTIC: ABSOLUTE PATHS + CLEAN EXIT) ===
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
     print("🔒 [STREAM] Cliente conectado. Iniciando streaming...", flush=True)
     
     def generate():
-        # 1. Latido inicial (Status: Working)
-        # Mantiene al cliente feliz mientras esperamos.
-        base_msg = {
+        ctx = "ctx-1"
+        task = "task-1"
+
+        # 1. Latido inicial
+        yield 'data: ' + json.dumps({
             "jsonrpc": "2.0", "id": 1,
             "result": {
-                "contextId": "ctx", "taskId": "task", "id": "task",
+                "contextId": ctx, "taskId": task,
                 "status": {"state": "working"}, "final": False,
                 "messageId": "msg-alive", "role": "assistant",
                 "parts": [{"text": "Game running...", "mimeType": "text/plain"}]
             }
-        }
-        # Formato SSE: "data: <json>\n\n"
-        yield "data: " + json.dumps(base_msg) + "\n\n"
+        }) + '\n\n'
         
         start_time = time.time()
         
         while True:
-            # Buscar resultados
-            # patterns = ['results/*.json', 'src/results/*.json', 'replays/*.jsonl', 'src/replays/*.jsonl', 'output/*.json']
-            # patterns = ['results/*.json', 'src/results/*.json', 'output/*.json']
+            # --- CAMBIO 1: RUTAS ABSOLUTAS (Como los ganadores) ---
+            # Buscamos en todas las ubicaciones posibles con ruta completa.
             patterns = [
                 '/app/src/results/*.json', 
                 '/app/results/*.json', 
                 '/app/output/*.json',
                 '/app/*.json',
-                'src/results/*.json' 
+                'src/results/*.json'
             ]
+            
             files = []
             for p in patterns:
                 files.extend(glob.glob(p))
             
             if files:
+                # Ordenar por fecha (más reciente primero)
                 files.sort(key=os.path.getmtime, reverse=True)
                 last_file = files[0]
                 
-                # Si encontramos un resultado reciente
+                # Si es reciente (< 10 min)
                 if (time.time() - os.path.getmtime(last_file)) < 600:
-                    print(f"✅ [FIN] Detectado: {os.path.basename(last_file)}", flush=True)
+                    print(f"✅ [FIN] Detectado: {last_file}", flush=True)
                     
-                    # Mensaje FINAL (Status: Completed) - Opción 1
+                    # Leemos el contenido para enviarlo INLINE (Robustez total)
+                    try:
+                        with open(last_file, 'r') as f: content = f.read()
+                    except: content = "{}"
+
+                    # --- CAMBIO 2: ESTRUCTURA FINAL CORRECTA + RETURN ---
                     final_msg = {
                         "jsonrpc": "2.0", "id": 1,
                         "result": {
-                            "contextId": "ctx", "taskId": "task", "id": "task",
-                            "status": {"state": "completed"}, "final": True,
-                            "messageId": "msg-done", "role": "assistant",
+                            "contextId": ctx, "taskId": task,
+                            "final": True,
+                            "status": {"state": "completed"},
+                            "messageId": "msg-done", 
+                            "role": "assistant",
                             "parts": [{"text": "Game Finished", "mimeType": "text/plain"}],
-                            "artifacts": [] 
+                            # Inyectamos el archivo como Artifact con contenido INLINE
+                            # Así el cliente no tiene que descargarlo, ya lo tiene.
+                            "artifacts": [
+                                {
+                                    "artifactId": "final-results",
+                                    "name": "results.json",
+                                    "kind": "file",
+                                    "parts": [{
+                                        "text": content, 
+                                        "mimeType": "application/json"
+                                    }]
+                                }
+                            ]
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
-                    break
+                    
+                    # --- CAMBIO CRÍTICO 3: CIERRE LIMPIO ---
+                    # Matamos el generador AQUÍ. No más yields, no más sleeps.
+                    # Esto evita el 'RuntimeError: athrow()' y el 'InvalidArgsError'.
+                    print("🏁 Stream cerrado correctamente.", flush=True)
+                    return 
             
-            if time.time() - start_time > 1800:
+            # Timeout de seguridad
+            if time.time() - start_time > 3600:
                 print("⏰ Timeout", flush=True)
                 break
                 
-            time.sleep(2)
-            # Enviar latido para mantener conexión viva
-            yield "data: " + json.dumps(base_msg) + "\n\n"
+            time.sleep(3)
+            # Latido (solo si NO hemos terminado)
+            yield "data: " + json.dumps({
+                "jsonrpc": "2.0", "id": 1,
+                "result": {"contextId": ctx, "taskId": task, "final": False, "status": {"state": "working"}}
+            }) + '\n\n'
 
-    # Retornamos una respuesta con el mimetype correcto para SSE
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 '''
 
