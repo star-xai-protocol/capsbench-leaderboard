@@ -98,7 +98,7 @@ def serve_results(filename):
     return jsonify({"error": "File not found"}), 404
 '''
 
-# === 3. RPC FINAL: COPIA FÍSICA + CIERRE LIMPIO ===
+# === 3. RPC FINAL: INYECCIÓN DE ID + COPIA + CIERRE ===
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
@@ -123,7 +123,6 @@ def dummy_rpc():
         while True:
             time.sleep(3) # Anti-Spam
 
-            # Rutas absolutas
             patterns = ['/app/src/results/*.json', '/app/results/*.json', '/app/output/*.json', 'src/results/*.json']
             files = []
             for p in patterns:
@@ -136,12 +135,33 @@ def dummy_rpc():
                 if (time.time() - os.path.getmtime(last_file)) < 600:
                     filename = os.path.basename(last_file)
                     print(f"✅ [FIN] Detectado: {filename}", flush=True)
+
+                    # --- 👇 FIX NUEVO: INYECTAR ID DE PARTICIPANTE 👇 ---
+                    try:
+                        # 1. Leemos el JSON actual
+                        with open(last_file, 'r') as f:
+                            data = json.load(f)
+                        
+                        # 2. Obtenemos el ID de la variable de entorno (que pasaremos desde Docker)
+                        agent_id = os.environ.get("AGENT_ID")
+                        
+                        # 3. Lo inyectamos si existe
+                        if agent_id:
+                            if "participants" not in data: data["participants"] = {}
+                            # Aquí insertamos el campo clave que falta:
+                            data["participants"]["participant"] = agent_id
+                            print(f"💉 ID Inyectado en JSON: {agent_id}", flush=True)
+                            
+                            # 4. Sobreescribimos el archivo con el dato nuevo
+                            with open(last_file, 'w') as f:
+                                json.dump(data, f, indent=2)
+                    except Exception as e:
+                        print(f"⚠️ Error inyectando ID: {e}", flush=True)
+                    # -----------------------------------------------------
                     
-                    # --- FIX CRÍTICO 1: COPIAR A OUTPUT ---
-                    # El cliente espera el archivo en el volumen montado /app/output/results.json
+                    # --- COPIAR A OUTPUT (Ya lo tenías y funciona) ---
                     try:
                         dest_path = "/app/output/results.json"
-                        # Asegurar que el directorio existe
                         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                         shutil.copy(last_file, dest_path)
                         print(f"📂 Archivo copiado a: {dest_path}", flush=True)
@@ -354,14 +374,12 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
     green = scenario["green_agent"]
     participants = scenario.get("participants", [])
 
-    # --- NUEVO: Extraer ID del PARTICIPANTE (Tu Agente) ---
-    # No usamos el ID del Green Agent. Buscamos el del participante.
+    # --- 👇 FIX NUEVO: Extraer ID del PARTICIPANTE y pasarlo al entorno 👇 ---
     if participants:
         # Cogemos al primer participante (Tu agente Púrpura)
         p_data = participants[0]
         
-        # Prioridad: 'webhook_id' (El UUID real de la API) > 'agentbeats_id' (El nombre)
-        # Este 'webhook_id' se obtiene en la función resolve_image al llamar a la API.
+        # Buscamos el UUID real (webhook_id) que nos dio la API
         participant_uuid = p_data.get("webhook_id") or p_data.get("agentbeats_id")
         
         if participant_uuid:
@@ -369,10 +387,10 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
             if "env" not in green:
                 green["env"] = {}
             
-            # La variable se llama AGENT_ID, pero contiene el ID del JUGADOR.
+            # La variable se llama AGENT_ID para que el script la lea
             green["env"]["AGENT_ID"] = participant_uuid
             print(f"ℹ️ Configurando ID del Participante para el reporte: {participant_uuid}")
-    # --------------------------------------------------
+    # -------------------------------------------------------------------------
 
     participant_names = [p["name"] for p in participants]
 
