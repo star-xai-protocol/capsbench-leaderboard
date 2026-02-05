@@ -1,0 +1,17 @@
+{
+  "image_digests": {
+    "green-agent": "ghcr.io/star-xai-protocol/capsbench@sha256:f1fac647e9401e9cdb8d3e0068a1f5245251a1b22a943afe77e2fb4418b8617a",
+    "purple_agent": "ghcr.io/star-xai-protocol/capsbench-purple@sha256:5c856a7cd06ef69d938b257620ee07811305f85a815019c6678066cef1b53394",
+    "agentbeats-client": "ghcr.io/agentbeats/agentbeats-client@sha256:13dfe3ef4e583a80e7ce2fe3becd0ce3b879841368a7f4fa40b6ebbabeeb014e"
+  },
+  "timestamp": "2026-02-05T10:08:02Z",
+  "github_actions": {
+    "run_url": "https://github.com/star-xai-protocol/capsbench-leaderboard/actions/runs/21706635961",
+    "run_logs_url": "https://api.github.com/repos/star-xai-protocol/capsbench-leaderboard/actions/runs/21706635961/logs",
+    "ref": "refs/heads/star-xai-protocol-patch-718736",
+    "sha": "3eff63dc3075b05fee4db38bc0822fd9bb5efe49",
+    "repository_url": "https://github.com/star-xai-protocol/capsbench-leaderboard",
+    "workflow_ref": "star-xai-protocol/capsbench-leaderboard/.github/workflows/run-scenario.yml@refs/heads/star-xai-protocol-patch-718736",
+    "workflow_sha": "3eff63dc3075b05fee4db38bc0822fd9bb5efe49"
+  }
+}
