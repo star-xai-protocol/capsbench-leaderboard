@@ -62,9 +62,9 @@ if "import time" not in content:
 
 # Reemplazamos la importación de Flask para incluir todo lo necesario para Streaming
 if "from flask import Flask" in content:
-    content = content.replace("from flask import Flask", "from flask import Flask, jsonify, request, Response, stream_with_context")
+    content = content.replace("from flask import Flask", "from flask import Flask, jsonify, request, Response, stream_with_context, send_file")
 else:
-    content = "from flask import Flask, jsonify, request, Response, stream_with_context\n" + content
+    content = "from flask import Flask, jsonify, request, Response, stream_with_context, send_file\n" + content
 
 # === 2. AGENT CARD (Ya funciona, la mantenemos igual) ===
 agent_card_route = r'''
@@ -84,8 +84,21 @@ def agent_card_fix():
         "defaultOutputModes": ["text"]
     })
 '''
+# === 2.1 RUTA PARA SERVIR RESULTADOS (NUEVO) ===
+serve_results_route = r'''
+@app.route('/results/<path:filename>')
+def serve_results(filename):
+    # Buscamos en todas las rutas posibles donde Docker podría haber dejado el archivo
+    possible_dirs = ['/app/src/results/', '/app/results/', '/app/output/', 'src/results/', 'results/']
+    for d in possible_dirs:
+        full_path = os.path.join(d, filename)
+        if os.path.isfile(full_path):
+            print(f"📂 Sirviendo archivo: {full_path}", flush=True)
+            return send_file(full_path, mimetype='application/json', as_attachment=True)
+    return jsonify({"error": "File not found"}), 404
+'''
 
-# === 3. NUEVA dummy_rpc (ESTILO WEREWOLF/CRYPTIC: ABSOLUTE PATHS + CLEAN EXIT) ===
+# === 3. RPC CON RATE LIMIT Y DESCARGA HTTP ===
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
@@ -109,35 +122,51 @@ def dummy_rpc():
         start_time = time.time()
         
         while True:
-            # --- CAMBIO 1: RUTAS ABSOLUTAS (Como los ganadores) ---
-            # Buscamos en todas las ubicaciones posibles con ruta completa.
+            # --- FIX: SLEEP AL PRINCIPIO (Evita la ametralladora de logs) ---
+            time.sleep(3)
+
+            # Rutas absolutas para encontrar el archivo
             patterns = [
-                '/app/src/results/*.json', 
-                '/app/results/*.json', 
-                '/app/output/*.json',
-                '/app/*.json',
-                'src/results/*.json'
+                '/app/src/results/*.json', '/app/results/*.json', 
+                '/app/output/*.json', 'src/results/*.json'
             ]
-            
             files = []
             for p in patterns:
                 files.extend(glob.glob(p))
             
             if files:
-                # Ordenar por fecha (más reciente primero)
                 files.sort(key=os.path.getmtime, reverse=True)
                 last_file = files[0]
                 
                 # Si es reciente (< 10 min)
                 if (time.time() - os.path.getmtime(last_file)) < 600:
-                    print(f"✅ [FIN] Detectado: {last_file}", flush=True)
+                    filename = os.path.basename(last_file)
+                    print(f"✅ [FIN] Detectado: {filename}", flush=True)
                     
-                    # Leemos el contenido para enviarlo INLINE (Robustez total)
-                    try:
-                        with open(last_file, 'r') as f: content = f.read()
-                    except: content = "{}"
+                    # URL de descarga apuntando a nuestra nueva ruta
+                    download_url = f"http://green-agent:9009/results/{filename}"
 
-                    # --- CAMBIO 2: ESTRUCTURA FINAL CORRECTA + RETURN ---
+                    # PASO A: Enviar URL del Artefacto (Estado Working)
+                    artifact_msg = {
+                        "jsonrpc": "2.0", "id": 1,
+                        "result": {
+                            "contextId": ctx, "taskId": task,
+                            "final": False, 
+                            "status": {"state": "working"},
+                            "artifacts": [{
+                                "artifactId": "final-results",
+                                "name": "CapsBench Summary",
+                                "mimeType": "application/json",
+                                "url": download_url
+                            }]
+                        }
+                    }
+                    yield "data: " + json.dumps(artifact_msg) + "\n\n"
+                    
+                    # Espera para que el cliente procese la URL
+                    time.sleep(2)
+
+                    # PASO B: Enviar Cierre (Artifacts VACÍO para evitar TypeError)
                     final_msg = {
                         "jsonrpc": "2.0", "id": 1,
                         "result": {
@@ -147,36 +176,18 @@ def dummy_rpc():
                             "messageId": "msg-done", 
                             "role": "assistant",
                             "parts": [{"text": "Game Finished", "mimeType": "text/plain"}],
-                            # Inyectamos el archivo como Artifact con contenido INLINE
-                            # Así el cliente no tiene que descargarlo, ya lo tiene.
-                            "artifacts": [
-                                {
-                                    "artifactId": "final-results",
-                                    "name": "results.json",
-                                    "kind": "file",
-                                    "parts": [{
-                                        "text": content, 
-                                        "mimeType": "application/json"
-                                    }]
-                                }
-                            ]
+                            "artifacts": [] 
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
                     
-                    # --- CAMBIO CRÍTICO 3: CIERRE LIMPIO ---
-                    # Matamos el generador AQUÍ. No más yields, no más sleeps.
-                    # Esto evita el 'RuntimeError: athrow()' y el 'InvalidArgsError'.
-                    print("🏁 Stream cerrado correctamente.", flush=True)
+                    print("🏁 Stream cerrado correctamente (RETURN).", flush=True)
                     return 
             
-            # Timeout de seguridad
             if time.time() - start_time > 3600:
                 print("⏰ Timeout", flush=True)
                 break
                 
-            time.sleep(3)
-            # Latido (solo si NO hemos terminado)
             yield "data: " + json.dumps({
                 "jsonrpc": "2.0", "id": 1,
                 "result": {"contextId": ctx, "taskId": task, "final": False, "status": {"state": "working"}}
@@ -194,7 +205,7 @@ if "if __name__" in content:
     parts = content.split("if __name__")
     content = "".join(parts[:-1]) + "\n" + agent_card_route + "\n" + new_dummy_rpc + "\n\nif __name__" + parts[-1]
 else:
-    content += "\n" + agent_card_route + "\n" + new_dummy_rpc
+    content += "\n" + agent_card_route + "\n" + serve_results_route + "\n" + new_dummy_rpc
 
 # === 6. GUARDAR Y EJECUTAR ===
 with open(target_file, 'w') as f:
