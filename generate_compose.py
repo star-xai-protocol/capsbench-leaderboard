@@ -354,6 +354,26 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
     green = scenario["green_agent"]
     participants = scenario.get("participants", [])
 
+    # --- NUEVO: Extraer ID del PARTICIPANTE (Tu Agente) ---
+    # No usamos el ID del Green Agent. Buscamos el del participante.
+    if participants:
+        # Cogemos al primer participante (Tu agente Púrpura)
+        p_data = participants[0]
+        
+        # Prioridad: 'webhook_id' (El UUID real de la API) > 'agentbeats_id' (El nombre)
+        # Este 'webhook_id' se obtiene en la función resolve_image al llamar a la API.
+        participant_uuid = p_data.get("webhook_id") or p_data.get("agentbeats_id")
+        
+        if participant_uuid:
+            # Se lo pasamos al Green Agent como variable de entorno
+            if "env" not in green:
+                green["env"] = {}
+            
+            # La variable se llama AGENT_ID, pero contiene el ID del JUGADOR.
+            green["env"]["AGENT_ID"] = participant_uuid
+            print(f"ℹ️ Configurando ID del Participante para el reporte: {participant_uuid}")
+    # --------------------------------------------------
+
     participant_names = [p["name"] for p in participants]
 
     participant_services = "\n".join([
@@ -365,8 +385,6 @@ def generate_docker_compose(scenario: dict[str, Any]) -> str:
         )
         for p in participants
     ])
-
-    all_services = ["green-agent"] + participant_names
 
     return COMPOSE_TEMPLATE.format(
         green_image=green["image"],
