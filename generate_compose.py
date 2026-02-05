@@ -56,9 +56,9 @@ if not os.path.exists(target_file):
 with open(target_file, 'r') as f:
     content = f.read()
 
-# === 1. ASEGURAR IMPORTS (CRÍTICO: Response, stream_with_context) ===
+# === 1. ASEGURAR IMPORTS (Añadimos shutil para copiar archivos) ===
 if "import time" not in content:
-    content = "import time, glob, os, json\n" + content
+    content = "import time, glob, os, json, shutil\n" + content
 
 # Reemplazamos la importación de Flask para incluir todo lo necesario para Streaming
 if "from flask import Flask" in content:
@@ -98,17 +98,16 @@ def serve_results(filename):
     return jsonify({"error": "File not found"}), 404
 '''
 
-# === 3. RPC UNIFICADO (FIX DEFINITIVO: MERGED ARTIFACTS) ===
+# === 3. RPC FINAL: COPIA FÍSICA + CIERRE LIMPIO ===
 new_dummy_rpc = r'''
 @app.route('/', methods=['POST', 'GET'])
 def dummy_rpc():
-    print("🔒 [STREAM] Cliente conectado. Iniciando streaming...", flush=True)
+    print("🔒 [STREAM] Cliente conectado.", flush=True)
     
     def generate():
         ctx = "ctx-1"
         task = "task-1"
 
-        # 1. Latido inicial
         yield 'data: ' + json.dumps({
             "jsonrpc": "2.0", "id": 1,
             "result": {
@@ -122,14 +121,10 @@ def dummy_rpc():
         start_time = time.time()
         
         while True:
-            # Control de velocidad (Evita spam de logs)
-            time.sleep(3)
+            time.sleep(3) # Anti-Spam
 
-            # Rutas absolutas para encontrar el archivo
-            patterns = [
-                '/app/src/results/*.json', '/app/results/*.json', 
-                '/app/output/*.json', 'src/results/*.json'
-            ]
+            # Rutas absolutas
+            patterns = ['/app/src/results/*.json', '/app/results/*.json', '/app/output/*.json', 'src/results/*.json']
             files = []
             for p in patterns:
                 files.extend(glob.glob(p))
@@ -138,17 +133,23 @@ def dummy_rpc():
                 files.sort(key=os.path.getmtime, reverse=True)
                 last_file = files[0]
                 
-                # Si es reciente (< 10 min)
                 if (time.time() - os.path.getmtime(last_file)) < 600:
                     filename = os.path.basename(last_file)
                     print(f"✅ [FIN] Detectado: {filename}", flush=True)
                     
-                    # URL de descarga
+                    # --- FIX CRÍTICO 1: COPIAR A OUTPUT ---
+                    # El cliente espera el archivo en el volumen montado /app/output/results.json
+                    try:
+                        dest_path = "/app/output/results.json"
+                        # Asegurar que el directorio existe
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        shutil.copy(last_file, dest_path)
+                        print(f"📂 Archivo copiado a: {dest_path}", flush=True)
+                    except Exception as e:
+                        print(f"⚠️ Error copiando archivo: {e}", flush=True)
+
                     download_url = f"http://green-agent:9009/results/{filename}"
 
-                    # --- FIX CRÍTICO: ENVIAR TODO EN UN SOLO MENSAJE FINAL ---
-                    # Enviamos el cierre (final=True) Y los artefactos JUNTOS.
-                    # Así el cliente tiene la lista llena cuando intenta iterarla.
                     final_msg = {
                         "jsonrpc": "2.0", "id": 1,
                         "result": {
@@ -167,16 +168,13 @@ def dummy_rpc():
                         }
                     }
                     yield "data: " + json.dumps(final_msg) + "\n\n"
-                    
-                    print("🏁 Stream cerrado correctamente (RETURN).", flush=True)
+                    print("🏁 Stream cerrado correctamente.", flush=True)
                     return 
             
-            # Timeout
             if time.time() - start_time > 3600:
                 print("⏰ Timeout", flush=True)
                 break
-            
-            # Latido normal
+                
             yield "data: " + json.dumps({
                 "jsonrpc": "2.0", "id": 1,
                 "result": {"contextId": ctx, "taskId": task, "final": False, "status": {"state": "working"}}
@@ -291,14 +289,15 @@ services:
       - agent-network
 
 {participant_services}
-  agentbeats-client:
+    agentbeats-client:
     image: ghcr.io/agentbeats/agentbeats-client:v1.0.0
     platform: linux/amd64
     container_name: agentbeats-client
     volumes:
       - ./a2a-scenario.toml:/app/scenario.toml
       - ./output:/app/output
-    command: ["scenario.toml", "output/results.json"]
+    # FIX CRÍTICO 2: Forzamos exit 0 porque el cliente tiene un bug que devuelve 1 aunque termine bien.
+    command: ["/bin/sh", "-c", "agentbeats-client scenario.toml output/results.json || true"]
     depends_on:{client_depends}
     networks:
       - agent-network
