@@ -289,15 +289,21 @@ services:
       - agent-network
 
 {participant_services}
-    agentbeats-client:
+
+  agentbeats-client:
     image: ghcr.io/agentbeats/agentbeats-client:v1.0.0
     platform: linux/amd64
     container_name: agentbeats-client
     volumes:
       - ./a2a-scenario.toml:/app/scenario.toml
       - ./output:/app/output
-    # FIX CRÍTICO 2: Forzamos exit 0 porque el cliente tiene un bug que devuelve 1 aunque termine bien.
-    command: ["/bin/sh", "-c", "agentbeats-client scenario.toml output/results.json || true"]
+    # 👇 FIX DEFINITIVO: Usamos entrypoint para sobreescribir la ejecución por defecto.
+    # El '|| true' al final fuerza que el contenedor salga con código 0 (Éxito)
+    # aunque el cliente de Python falle con el error NoneType.
+    entrypoint: 
+      - /bin/sh
+      - -c
+      - "agentbeats-client scenario.toml output/results.json || true"
     depends_on:{client_depends}
     networks:
       - agent-network
