@@ -1,17 +1,13 @@
 [green_agent]
-# 👇 ESTA LÍNEA ES LA QUE FALTA. SIN ELLA, EL CLIENTE NO SABE DÓNDE IR.   
 endpoint = "http://green-agent:9009"
 
-# Puedes dejar tu ID y la imagen.
 agentbeats_id = "019c0c11-ce03-77e0-91b3-fa958206b1fc"
-# image = "ghcr.io/star-xai-protocol/capsbench:latest"
 
 env = { PORT = "9009", LOG_LEVEL = "INFO" }
 
 [[participants]]
 agentbeats_id = "019c0b17-335b-7553-8b43-81d097bb5387"
 name = "purple_agent"
-# Esto está perfecto:
 env = { GOOGLE_API_KEY = "${GOOGLE_API_KEY}", SERVER_URL = "http://green-agent:9009" }
 
 [config]
