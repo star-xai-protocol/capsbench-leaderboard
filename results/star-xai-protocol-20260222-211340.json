@@ -1,0 +1,31 @@
+{
+  "participants": {
+    "participant": "019c869f-ab8e-71c1-91e3-18311e85b463"
+  },
+  "results": [
+    {
+      "benchmark_version": "iXentBench-v1.0",
+      "timestamp": "2026-02-22T21:13:19Z",
+      "participants": {
+        "agent_id": "Purple-Agent-gemini-3-pro-preview",
+        "green_agent": "ixentbench-logic-v1"
+      },
+      "results": [
+        {
+          "level_played": "1",
+          "success": false,
+          "outcome": "TIMEOUT",
+          "efficiency_score": 27,
+          "moves_used": 22,
+          "ideal_moves": 12,
+          "max_moves": 22,
+          "mice_rescued_percentage": 0.0,
+          "token_usage": {
+            "total": 384253
+          },
+          "replay_file": "replays/replay_L1_Purple-Agent-gemini-3-pro-preview_20260222_203310.jsonl"
+        }
+      ]
+    }
+  ]
+}
